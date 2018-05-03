@@ -2231,6 +2231,8 @@ static void *miner_thread(void *userdata)
 			case ALGO_SKEIN:
 			case ALGO_SKEIN2:
 			case ALGO_TRIBUS:
+			case ALGO_X16R:
+			case ALGO_X16S:
 				minmax = 0x1000000;
 				break;
 			case ALGO_C11:
