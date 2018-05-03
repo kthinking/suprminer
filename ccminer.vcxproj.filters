@@ -1012,6 +1012,8 @@
     <CudaCompile Include="x13\cuda_x13_hamsi512_alexis.cu">
       <Filter>Source Files\CUDA\x13</Filter>
     </CudaCompile>
+    <CudaCompile Include="x16r\x16s.cu" />
+    <CudaCompile Include="x11\cuda_x11_cubehash512_80.cu" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\ccminer.ico">
