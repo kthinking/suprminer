@@ -250,8 +250,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 	uint32_t *ptarget = work->target;
 	const uint32_t first_nonce = pdata[19];
 	const int dev_id = device_map[thr_id];
-	int intensity = (device_sm[dev_id] > 500 && !is_windows()) ? 20 : 19;
-	if (strstr(device_name[dev_id], "GTX 1080")) intensity = 20;
+	int intensity = (device_sm[dev_id] > 500 ) ? 20 : 19;
+	if (strstr(device_name[dev_id], "GTX 1080")) intensity = 21;
 	uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
 	//if (init[thr_id]) throughput = min(throughput, max_nonce - first_nonce);
 
@@ -297,8 +297,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 
 	if (opt_benchmark) {
 		((uint32_t*)ptarget)[7] = 0x003f;
-		((uint32_t*)pdata)[1] = 0x66666666;
-		((uint32_t*)pdata)[2] = 0x66666666;
+		((uint32_t*)pdata)[1] = 0x88888888;
+		((uint32_t*)pdata)[2] = 0x88888888;
 		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
