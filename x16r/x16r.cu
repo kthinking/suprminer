@@ -395,7 +395,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		CUDA_SAFE_CALL(cudaMemset(d_resNonce[thr_id], 0xFFFFFFFF, 2 * sizeof(uint32_t)));
 
 		uint32_t start = pdata[19];
-		uint32_t foundNonce;
+		//uint32_t foundNonce;
 		bool addstart = false;
 
 
@@ -500,7 +500,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				{
 					x11_luffa512_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], ((uint64_t *)ptarget)[3], d_resNonce[thr_id]);
 					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
-					foundNonce = h_resNonce[thr_id][0];
+					work->nonces[0] = h_resNonce[thr_id][0];
 					addstart = true;
 				}
 				else
@@ -540,15 +540,15 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 
 		if (!addstart)
 		{
-			foundNonce = cuda_check_hash(thr_id, throughput, pdata[19], d_hash[thr_id]);
+			work->nonces[0] = cuda_check_hash(thr_id, throughput, pdata[19], d_hash[thr_id]);
 		}
 
 		*hashes_done = pdata[19] - first_nonce + throughput;
-		if (foundNonce != UINT32_MAX)
+		if (work->nonces[0] != UINT32_MAX)
 		{
 			if (opt_benchmark) gpulog(LOG_BLUE, dev_id, "found");
 
-			if (addstart) foundNonce += pdata[19];
+			if (addstart) work->nonces[0] += pdata[19];
 
 			if (work_restart[thr_id].restart)
 			{
@@ -558,23 +558,23 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			}
 			uint32_t _ALIGN(64) vhash64[8];
 			//			const uint32_t Htarg = ptarget[7];
-			be32enc(&endiandata[19], foundNonce);
+			be32enc(&endiandata[19], work->nonces[0]);
 			x16r_hash(vhash64, endiandata);
 
 			if (vhash64[7] <= ptarget[7] && fulltest(vhash64, ptarget))
 			{
 				int res = 1;
 				// check if there was some other ones...
-				uint32_t secNonce = UINT32_MAX;
+				//uint32_t secNonce = UINT32_MAX;
 
 				if (addstart && (h_resNonce[thr_id][1] != UINT32_MAX))
 				{
-					secNonce = h_resNonce[thr_id][1] + pdata[19];
+					work->nonces[1] = h_resNonce[thr_id][1] + pdata[19];
 				}
 				if (!addstart)
 				{
-					secNonce = cuda_check_hash_suppl(thr_id, throughput, pdata[19], d_hash[thr_id], 1);
-					if (secNonce == 0) secNonce = UINT32_MAX;
+					work->nonces[1] = cuda_check_hash_suppl(thr_id, throughput, pdata[19], d_hash[thr_id], 1);
+					if (work->nonces[1] == 0) work->nonces[1] = UINT32_MAX;
 				}
 
 				/*
@@ -591,15 +591,15 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 
 				work_set_target_ratio(work, vhash64);
 				*hashes_done = pdata[19] - first_nonce + throughput;
-				pdata[19] = foundNonce;
-				if (secNonce != UINT32_MAX)
+				pdata[19] = work->nonces[0];
+				if (work->nonces[1] != UINT32_MAX)
 				{
 					//					gpulog(LOG_BLUE, dev_id, "found2");
 
 					//					if(!opt_quiet)
 					//						gpulog(LOG_BLUE,dev_id,"Found 2nd nonce: %08x", secNonce);
-					be32enc(&endiandata[19], secNonce);
-					pdata[21] = secNonce;
+					be32enc(&endiandata[19], work->nonces[1]);
+					pdata[21] = work->nonces[1];
 					x16r_hash(vhash64, endiandata);
 					if (bn_hash_target_ratio(vhash64, ptarget) > work->shareratio[0]){
 						work_set_target_ratio(work, vhash64);
@@ -611,7 +611,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		}
 			else
 			{
-				if (vhash64[7] != ptarget[7]) gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", foundNonce);
+				if (vhash64[7] != ptarget[7]) gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", work->nonces[0]);
 			}
 			}
 		pdata[19] += throughput;
