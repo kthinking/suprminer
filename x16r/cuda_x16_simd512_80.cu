@@ -1675,7 +1675,7 @@ void x16_simd512_setBlock_80(void *pdata)
 	cudaMemcpyToSymbol(c_PaddedMessage80, pdata, sizeof(c_PaddedMessage80), 0, cudaMemcpyHostToDevice);
 }
 
-#define TPB_SIMD 128
+#define TPB_SIMD 256
 __global__
 __launch_bounds__(TPB_SIMD,1)
 static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce, uint64_t *g_outputhash)
