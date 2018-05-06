@@ -308,8 +308,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 //		((uint32_t*)pdata)[2] = 0x9A9A9A9A;
 //		((uint32_t*)pdata)[1] = 0xAAAAAAAA;
 //		((uint32_t*)pdata)[2] = 0xAAAAAAAA;
-		((uint32_t*)pdata)[1] = 0xCCCCCCCC;
-		((uint32_t*)pdata)[2] = 0xCCCCCCCC;
+		((uint32_t*)pdata)[1] = 0xBBBBBBBB;
+		((uint32_t*)pdata)[2] = 0xBBBBBBBB;
 
 		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
@@ -376,7 +376,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			x16_echo512_setBlock_80((void*)endiandata);
 			break;
 		case HAMSI:
-			x16_hamsi512_setBlock_80((void*)endiandata);
+			x16_hamsi512_setBlock_80((uint64_t*)endiandata);
 			break;
 		case FUGUE:
 			x16_fugue512_setBlock_80((void*)pdata);

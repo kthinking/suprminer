@@ -349,7 +349,7 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		x16_echo512_setBlock_80((void*)endiandata);
 		break;
 	case HAMSI:
-		x16_hamsi512_setBlock_80((void*)endiandata);
+		x16_hamsi512_setBlock_80((uint64_t*)endiandata);
 		break;
 	case FUGUE:
 		x16_fugue512_setBlock_80((void*)pdata);
