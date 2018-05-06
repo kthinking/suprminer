@@ -39,7 +39,7 @@ static uint32_t h_resNonce[MAX_GPUS][4];
 extern void quark_bmw512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
 extern void x11_luffa512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint64_t target, uint32_t *d_resNonce);
 extern void tribus_echo512_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
-
+extern void x16_simd_echo512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 
 static uint32_t *d_hash[MAX_GPUS];
 
@@ -297,9 +297,16 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 	}
 
 	if (opt_benchmark) {
-		((uint32_t*)ptarget)[7] = 0x003f;
-		((uint32_t*)pdata)[1] = 0xAAAAAAAA;
-		((uint32_t*)pdata)[2] = 0xAAAAAAAA;
+		((uint32_t*)ptarget)[7] = 0x003ff;
+//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
+//		((uint32_t*)pdata)[2] = 0x76543210;
+		((uint32_t*)pdata)[1] = 0x9A9A9A9A;
+		((uint32_t*)pdata)[2] = 0x9A9A9A9A;
+//		((uint32_t*)pdata)[1] = 0xAAAAAAAA;
+//		((uint32_t*)pdata)[2] = 0xAAAAAAAA;
+//		((uint32_t*)pdata)[1] = 0x99999999;
+//		((uint32_t*)pdata)[2] = 0x99999999;
+
 		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
@@ -460,6 +467,13 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			const char elem = hashOrder[i];
 			const uint8_t algo64 = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
 
+			uint8_t nextalgo = -1;
+			if (i < 15)
+			{
+				const char elem2 = hashOrder[i + 1];
+				nextalgo = elem2 >= 'A' ? elem2 - 'A' + 10 : elem2 - '0';
+			}
+
 			switch (algo64) {
 			case BLAKE:
 				quark_blake512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
@@ -512,7 +526,15 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				x11_shavite512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
 				break;
 			case SIMD:
-				x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				if (nextalgo == ECHO)
+				{
+					x16_simd_echo512_cpu_hash_64(thr_id, throughput,d_hash[thr_id]);
+					i = i + 1;
+				}
+				else
+				{
+					x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				}
 				break;
 			case ECHO:
 				if (i == 15)
