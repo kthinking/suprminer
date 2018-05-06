@@ -1,14 +1,17 @@
+/*
+* fugue512-80 x16r kernel implementation.
+*
+* ==========================(LICENSE BEGIN)============================
+*
+* Copyright (c) 2018 tpruvot
+* Copyright (c) 2018 sp (+60% faster)
+*/
 
 #include <stdio.h>
 #include <cuda_helper_alexis.h>
 
 #define TPB 256
 
-/*
-* fugue512-80 x16r kernel implementation.
-* Copyright (c) 2018 tpruvot
-* Copyright (c) 2018 sp (added 20% more speed)
-*/
 
 #ifdef __INTELLISENSE__
 #define __byte_perm(x, y, m) (x|y)
@@ -20,7 +23,11 @@
 // store allocated textures device addresses
 static unsigned int* d_textures[MAX_GPUS][1];
 
+#if defined(__CUDA_ARCH__)
 #define mixtab0(x) __ldg(&dmixtab0[(x)])
+#else
+#define mixtab0(x) mixtabs[(x)]
+#endif
 #define mixtab1(x) mixtabs[(x)+256]
 #define mixtab2(x) mixtabs[(x)+512]
 #define mixtab3(x) mixtabs[(x)+768]
@@ -297,14 +304,67 @@ return __byte_perm(a, 0, 0x0321);
 #define ROL16(u) ROTL32(u,16)
 #endif
 */
-//#define AS_UINT4(addr) *((uint4*)(addr))
 
-__constant__ static uint64_t c_PaddedMessage80[10];
+__constant__ static uint32_t c_data[20];
+__constant__ static uint32_t c_s[36];
 
 __host__
 void x16_fugue512_setBlock_80(void *pdata)
 {
-	cudaMemcpyToSymbol(c_PaddedMessage80, pdata, sizeof(c_PaddedMessage80), 0, cudaMemcpyHostToDevice);
+
+	uint32_t Data[20];
+	uint32_t S[35];
+	uint32_t B[9];
+
+	uint32_t mixtabs[1024];
+
+	for (int i = 0; i < 20; i++)
+	{
+		Data[i] = ((uint32_t*)pdata)[i];
+	}
+
+	for (int i = 0; i < 256; i++)
+	{
+		uint32_t tmp = mixtab0[i];
+
+		mixtabs[i] = tmp;
+		mixtabs[i + 256] = ROTR32(tmp,8);
+		mixtabs[i + 512] = ROTL32(tmp,16);
+		mixtabs[i + 768] = ROTL32(tmp,8);
+	}
+
+	uint32_t S00, S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11;
+	uint32_t S12, S13, S14, S15, S16, S17, S18, S19, S20, S21, S22, S23;
+	uint32_t S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35;
+	uint32_t B27, B28, B29, B30, B31, B32, B33, B34, B35;
+
+	S00 = S01 = S02 = S03 = S04 = S05 = S06 = S07 = S08 = S09 = 0;
+	S10 = S11 = S12 = S13 = S14 = S15 = S16 = S17 = S18 = S19 = 0;
+	S20 = 0x8807a57e; S21 = 0xe616af75; S22 = 0xc5d3e4db; S23 = 0xac9ab027;
+	S24 = 0xd915f117; S25 = 0xb6eecc54; S26 = 0x06e8020b; S27 = 0x4a92efd1;
+	S28 = 0xaac6e2c9; S29 = 0xddb21398; S30 = 0xcae65838; S31 = 0x437f203f;
+	S32 = 0x25ea78e7; S33 = 0x951fddd6; S34 = 0xda6ed11d; S35 = 0xe13e3567;
+
+	FUGUE512_3((Data[0]), (Data[1]), (Data[2]));
+	FUGUE512_3((Data[3]), (Data[4]), (Data[5]));
+	FUGUE512_3((Data[6]), (Data[7]), (Data[8]));
+	FUGUE512_3((Data[9]), (Data[10]), (Data[11]));
+	FUGUE512_3((Data[12]), (Data[13]), (Data[14]));
+	FUGUE512_3((Data[15]), (Data[16]), (Data[17]));
+
+
+	S[0] = S00; S[1] = S01; S[2] = S02; S[3] = S03; S[4] = S04; S[5] = S05;
+	S[6] = S06; S[7] = S07; S[8] = S08; S[9] = S09; S[10] = S10; S[11] = S11;
+	S[12] = S12; S[13] = S13; S[14] = S14; S[15] = S15; S[16] = S16; S[17] = S17;
+	S[18] = S18; S[19] = S19; S[20] = S20; S[21] = S21; S[22] = S22; S[23] = S23;
+	S[24] = S24; S[25] = S25; S[26] = S26; S[27] = S27; S[28] = S28; S[29] = S29;
+	S[30] = S30; S[31] = S31; S[32] = S32; S[33] = S33; S[34] = S34; S[35] = S35;
+
+
+	cudaMemcpyToSymbol(c_data, Data, sizeof(c_data), 0, cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol(c_s, S, sizeof(c_s), 0, cudaMemcpyHostToDevice);
+
+
 }
 
 /***************************************************/
@@ -340,9 +400,13 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 	{
 		uint32_t Data[20];
 
-#pragma unroll
-		for (int i = 0; i < 10; i++)
-			AS_UINT2(&Data[i * 2]) = AS_UINT2(&c_PaddedMessage80[i]);
+		//#pragma unroll
+		//for(int i = 0; i < 10; i++)
+		//	AS_UINT2(&Data[i * 2]) = AS_UINT2(&c_data[i]);
+
+		for (int i = 0; i < 19; i++)
+			Data[i] = c_data[i];
+
 		Data[19] = (startNonce + thread);
 
 		uint32_t S00, S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11;
@@ -350,23 +414,23 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 		uint32_t S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35;
 		//uint32_t B24, B25, B26,
 		uint32_t B27, B28, B29, B30, B31, B32, B33, B34, B35;
-		//const uint64_t bc = 640 bits to hash
-		//const uint32_t bclo = (uint32_t)(bc);
-		//const uint32_t bchi = (uint32_t)(bc >> 32);
 
-		S00 = S01 = S02 = S03 = S04 = S05 = S06 = S07 = S08 = S09 = 0;
-		S10 = S11 = S12 = S13 = S14 = S15 = S16 = S17 = S18 = S19 = 0;
-		S20 = 0x8807a57e; S21 = 0xe616af75; S22 = 0xc5d3e4db; S23 = 0xac9ab027;
-		S24 = 0xd915f117; S25 = 0xb6eecc54; S26 = 0x06e8020b; S27 = 0x4a92efd1;
-		S28 = 0xaac6e2c9; S29 = 0xddb21398; S30 = 0xcae65838; S31 = 0x437f203f;
-		S32 = 0x25ea78e7; S33 = 0x951fddd6; S34 = 0xda6ed11d; S35 = 0xe13e3567;
+		S00 = c_s[0]; S01 = c_s[1]; S02 = c_s[2]; S03 = c_s[3]; S04 = c_s[4]; S05 = c_s[5];
+		S06 = c_s[6]; S07 = c_s[7]; S08 = c_s[8]; S09 = c_s[9]; S10 = c_s[10]; S11 = c_s[11];
+		S12 = c_s[12]; S13 = c_s[13]; S14 = c_s[14]; S15 = c_s[15]; S16 = c_s[16]; S17 = c_s[17];
+		S18 = c_s[18]; S19 = c_s[19]; S20 = c_s[20]; S21 = c_s[21]; S22 = c_s[22]; S23 = c_s[23];
+		S24 = c_s[24]; S25 = c_s[25]; S26 = c_s[26]; S27 = c_s[27]; S28 = c_s[28]; S29 = c_s[29];
+		S30 = c_s[30]; S31 = c_s[31]; S32 = c_s[32]; S33 = c_s[33]; S34 = c_s[34]; S35 = c_s[35];
 
-		FUGUE512_3((Data[0]), (Data[1]), (Data[2]));
-		FUGUE512_3((Data[3]), (Data[4]), (Data[5]));
-		FUGUE512_3((Data[6]), (Data[7]), (Data[8]));
-		FUGUE512_3((Data[9]), (Data[10]), (Data[11]));
+
+		/*		FUGUE512_3((Data[ 0]), (Data[ 1]), (Data[ 2]));
+		FUGUE512_3((Data[ 3]), (Data[ 4]), (Data[ 5]));
+		FUGUE512_3((Data[ 6]), (Data[ 7]), (Data[ 8]));
+		FUGUE512_3((Data[ 9]), (Data[10]), (Data[11]));
 		FUGUE512_3((Data[12]), (Data[13]), (Data[14]));
 		FUGUE512_3((Data[15]), (Data[16]), (Data[17]));
+		*/
+
 		FUGUE512_F((Data[18]), (Data[19]), 0/*bchi*/, (80 * 8)/*bclo*/);
 
 		// rotate right state by 3 dwords (S00 = S33, S03 = S00)
@@ -435,133 +499,6 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 			AS_UINT4(&pHash[i * 2]) = AS_UINT4(&Data[i * 4]);
 	}
 }
-
-__global__
-__launch_bounds__(TPB, 4)
-void x16_fugue512_gpu_hash_64(uint32_t threads, uint64_t *g_hash)
-{
-	__shared__ uint32_t mixtabs[1024];
-
-	// load shared mem (with 256 threads)
-	const uint32_t thr = threadIdx.x & 0xFF;
-	const uint32_t tmp = tex1Dfetch(mixTab0Tex, thr);
-	mixtabs[thr] = tmp;
-	mixtabs[thr + 256] = ROR8(tmp);
-	mixtabs[thr + 512] = ROL16(tmp);
-	mixtabs[thr + 768] = ROL8(tmp);
-#if TPB <= 256
-	if (blockDim.x < 256) {
-		const uint32_t thr = (threadIdx.x + 0x80) & 0xFF;
-		const uint32_t tmp = tex1Dfetch(mixTab0Tex, thr);
-		mixtabs[thr] = tmp;
-		mixtabs[thr + 256] = ROR8(tmp);
-		mixtabs[thr + 512] = ROL16(tmp);
-		mixtabs[thr + 768] = ROL8(tmp);
-	}
-#endif
-
-	__syncthreads();
-
-	uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
-	if (thread < threads)
-	{
-		const size_t hashPosition = thread;
-		uint64_t*pHash = &g_hash[hashPosition << 3];
-		uint32_t Hash[16];
-
-#pragma unroll 4
-		for (int i = 0; i < 4; i++)
-			AS_UINT4(&Hash[i * 4]) = AS_UINT4(&pHash[i * 2]);
-
-#pragma unroll 16
-		for (int i = 0; i < 16; i++)
-			Hash[i] = cuda_swab32(Hash[i]);
-
-		uint32_t S00, S01, S02, S03, S04, S05, S06, S07, S08, S09;
-		uint32_t S10, S11, S12, S13, S14, S15, S16, S17, S18, S19;
-		uint32_t S20, S21, S22, S23, S24, S25, S26, S27, S28, S29;
-		uint32_t S30, S31, S32, S33, S34, S35;
-
-		uint32_t B27, B28, B29, B30, B31, B32, B33, B34, B35;
-		//const uint64_t bc = (64ULL << 3); // 512
-		//const uint32_t bclo = (uint32_t)(bc);
-		//const uint32_t bchi = (uint32_t)(bc >> 32);
-
-		S00 = S01 = S02 = S03 = S04 = S05 = S06 = S07 = S08 = S09 = 0;
-		S10 = S11 = S12 = S13 = S14 = S15 = S16 = S17 = S18 = S19 = 0;
-		S20 = 0x8807a57e; S21 = 0xe616af75; S22 = 0xc5d3e4db; S23 = 0xac9ab027;
-		S24 = 0xd915f117; S25 = 0xb6eecc54; S26 = 0x06e8020b; S27 = 0x4a92efd1;
-		S28 = 0xaac6e2c9; S29 = 0xddb21398; S30 = 0xcae65838; S31 = 0x437f203f;
-		S32 = 0x25ea78e7; S33 = 0x951fddd6; S34 = 0xda6ed11d; S35 = 0xe13e3567;
-
-		FUGUE512_3((Hash[0x0]), (Hash[0x1]), (Hash[0x2]));
-		FUGUE512_3((Hash[0x3]), (Hash[0x4]), (Hash[0x5]));
-		FUGUE512_3((Hash[0x6]), (Hash[0x7]), (Hash[0x8]));
-		FUGUE512_3((Hash[0x9]), (Hash[0xA]), (Hash[0xB]));
-		FUGUE512_3((Hash[0xC]), (Hash[0xD]), (Hash[0xE]));
-		FUGUE512_3((Hash[0xF]), 0u /*bchi*/, 512u /*bclo*/);
-
-#pragma unroll 32
-		for (int i = 0; i < 32; i++) {
-			SUB_ROR3;
-			CMIX36(S00, S01, S02, S04, S05, S06, S18, S19, S20);
-			SMIX(S00, S01, S02, S03);
-		}
-#pragma unroll 13
-		for (int i = 0; i < 13; i++) {
-			S04 ^= S00;
-			S09 ^= S00;
-			S18 ^= S00;
-			S27 ^= S00;
-			SUB_ROR9;
-			SMIX(S00, S01, S02, S03);
-			S04 ^= S00;
-			S10 ^= S00;
-			S18 ^= S00;
-			S27 ^= S00;
-			SUB_ROR9;
-			SMIX(S00, S01, S02, S03);
-			S04 ^= S00;
-			S10 ^= S00;
-			S19 ^= S00;
-			S27 ^= S00;
-			SUB_ROR9;
-			SMIX(S00, S01, S02, S03);
-			S04 ^= S00;
-			S10 ^= S00;
-			S19 ^= S00;
-			S28 ^= S00;
-			SUB_ROR8;
-			SMIX(S00, S01, S02, S03);
-		}
-		S04 ^= S00;
-		S09 ^= S00;
-		S18 ^= S00;
-		S27 ^= S00;
-
-		Hash[0] = cuda_swab32(S01);
-		Hash[1] = cuda_swab32(S02);
-		Hash[2] = cuda_swab32(S03);
-		Hash[3] = cuda_swab32(S04);
-		Hash[4] = cuda_swab32(S09);
-		Hash[5] = cuda_swab32(S10);
-		Hash[6] = cuda_swab32(S11);
-		Hash[7] = cuda_swab32(S12);
-		Hash[8] = cuda_swab32(S18);
-		Hash[9] = cuda_swab32(S19);
-		Hash[10] = cuda_swab32(S20);
-		Hash[11] = cuda_swab32(S21);
-		Hash[12] = cuda_swab32(S27);
-		Hash[13] = cuda_swab32(S28);
-		Hash[14] = cuda_swab32(S29);
-		Hash[15] = cuda_swab32(S30);
-
-#pragma unroll 4
-		for (int i = 0; i < 4; i++)
-			AS_UINT4(&pHash[i * 2]) = AS_UINT4(&Hash[i * 4]);
-	}
-}
-
 
 #define texDef(id, texname, texmem, texsource, texsize) { \
 	unsigned int *texmem; \
