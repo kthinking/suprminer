@@ -1,5 +1,7 @@
+// (c) SP may 2016
+
 #include <cuda_helper.h>
-#include <cuda_vectors.h>
+#include <cuda_vectors_alexis.h>
 
 #define CUBEHASH_ROUNDS 16 /* this is r for CubeHashr/b */
 #define CUBEHASH_BLOCKBYTES 32 /* this is b for CubeHashr/b */
@@ -13,7 +15,7 @@
 #define ROTATEUPWARDS7(a)  LROT(a,7)
 #define ROTATEUPWARDS11(a) LROT(a,11)
 
-#define SWAP(a,b) { uint32_t u = a; a = b; b = u; }
+#define SWAP(a,b) xchg(a,b);
 
 __device__ __constant__
 static const uint32_t c_IV_512[32] = {
@@ -27,7 +29,18 @@ static const uint32_t c_IV_512[32] = {
 	0x1921C8F7, 0xE7989AF1, 0x7795D246, 0xD43E3B44
 };
 
-__device__ __forceinline__
+static const uint32_t c_IV_512_c[32] = {
+	0x2AEA2A61, 0x50F494D4, 0x2D538B8B, 0x4167D83E,
+	0x3FEE2313, 0xC701CF8C, 0xCC39968E, 0x50AC5695,
+	0x4D42C787, 0xA647A8B3, 0x97CF0BEF, 0x825B4537,
+	0xEEF864D2, 0xF22090C4, 0xD0E5CD33, 0xA23911AE,
+	0xFCD398D9, 0x148FE485, 0x1B017BEF, 0xB6444532,
+	0x6A536159, 0x2FF5781C, 0x91FA7934, 0x0DBADEA9,
+	0xD65C8A2B, 0xA5A70E75, 0xB1C62456, 0xBC796576,
+	0x1921C8F7, 0xE7989AF1, 0x7795D246, 0xD43E3B44
+};
+
+__device__ __host__ __forceinline__
 static void rrounds(uint32_t x[2][2][2][2][2])
 {
     int r;
@@ -36,7 +49,7 @@ static void rrounds(uint32_t x[2][2][2][2][2])
     int l;
     int m;
 
-//#pragma unroll 16
+	#pragma unroll 16
     for (r = 0;r < CUBEHASH_ROUNDS;++r) {
 
         /* "add x_0jklm into x_1jklmn modulo 2^32" */
@@ -144,7 +157,7 @@ static void rrounds(uint32_t x[2][2][2][2][2])
     }
 }
 
-__device__ __forceinline__
+__device__ __host__ __forceinline__
 static void block_tox(uint32_t* const block, uint32_t x[2][2][2][2][2])
 {
 	// read 32 bytes input from global mem with uint2 chunks
@@ -154,7 +167,7 @@ static void block_tox(uint32_t* const block, uint32_t x[2][2][2][2][2])
 	AS_UINT2(x[0][0][1][1]) ^= AS_UINT2(&block[6]);
 }
 
-__device__ __forceinline__
+__device__ __host__ __forceinline__
 static void hash_fromx(uint32_t hash[16], uint32_t const x[2][2][2][2][2])
 {
 	// used to write final hash to global mem
@@ -186,7 +199,26 @@ static void hash_fromx(uint32_t hash[16], uint32_t const x[2][2][2][2][2])
 	AS_UINT2(x[1][1][1][0]) = AS_UINT2(&c_IV_512[28]); \
 	AS_UINT2(x[1][1][1][1]) = AS_UINT2(&c_IV_512[30]);
 
-__device__ __forceinline__
+#define Init_cpu(x) \
+	AS_UINT2(x[0][0][0][0]) = AS_UINT2(&c_IV_512_c[ 0]); \
+	AS_UINT2(x[0][0][0][1]) = AS_UINT2(&c_IV_512_c[ 2]); \
+	AS_UINT2(x[0][0][1][0]) = AS_UINT2(&c_IV_512_c[ 4]); \
+	AS_UINT2(x[0][0][1][1]) = AS_UINT2(&c_IV_512_c[ 6]); \
+	AS_UINT2(x[0][1][0][0]) = AS_UINT2(&c_IV_512_c[ 8]); \
+	AS_UINT2(x[0][1][0][1]) = AS_UINT2(&c_IV_512_c[10]); \
+	AS_UINT2(x[0][1][1][0]) = AS_UINT2(&c_IV_512_c[12]); \
+	AS_UINT2(x[0][1][1][1]) = AS_UINT2(&c_IV_512_c[14]); \
+	AS_UINT2(x[1][0][0][0]) = AS_UINT2(&c_IV_512_c[16]); \
+	AS_UINT2(x[1][0][0][1]) = AS_UINT2(&c_IV_512_c[18]); \
+	AS_UINT2(x[1][0][1][0]) = AS_UINT2(&c_IV_512_c[20]); \
+	AS_UINT2(x[1][0][1][1]) = AS_UINT2(&c_IV_512_c[22]); \
+	AS_UINT2(x[1][1][0][0]) = AS_UINT2(&c_IV_512_c[24]); \
+	AS_UINT2(x[1][1][0][1]) = AS_UINT2(&c_IV_512_c[26]); \
+	AS_UINT2(x[1][1][1][0]) = AS_UINT2(&c_IV_512_c[28]); \
+	AS_UINT2(x[1][1][1][1]) = AS_UINT2(&c_IV_512_c[30]);
+
+
+__device__ __host__ __forceinline__
 static void Update32(uint32_t x[2][2][2][2][2], uint32_t* const data)
 {
 	/* "xor the block into the first b bytes of the state" */
@@ -216,13 +248,34 @@ static void Final(uint32_t x[2][2][2][2][2], uint32_t *hashval)
 #define WANT_CUBEHASH80
 #ifdef WANT_CUBEHASH80
 
-__constant__
-static uint32_t c_PaddedMessage80[20];
+__constant__ static uint32_t c_x[32];
+__constant__ static uint32_t c_message[3];
 
 __host__
 void cubehash512_setBlock_80(int thr_id, uint32_t* endiandata)
 {
-	cudaMemcpyToSymbol(c_PaddedMessage80, endiandata, sizeof(c_PaddedMessage80), 0, cudaMemcpyHostToDevice);
+	uint32_t x[2][2][2][2][2];
+	Init_cpu(x);
+
+	uint32_t message[8];
+	// first 32 bytes
+	AS_UINT4(&message[0]) = AS_UINT4(&endiandata[0]);
+	AS_UINT4(&message[4]) = AS_UINT4(&endiandata[4]);
+	Update32(x, message);
+
+	// second 32 bytes
+	AS_UINT4(&message[0]) = AS_UINT4(&endiandata[8]);
+	AS_UINT4(&message[4]) = AS_UINT4(&endiandata[12]);
+	Update32(x, message);
+
+	AS_UINT4(&message[0]) = AS_UINT4(&endiandata[16]);
+	message[4] = 0x80;
+	message[5] = 0;
+	message[6] = 0;
+	message[7] = 0;
+
+	cudaMemcpyToSymbol(c_x, x, sizeof(c_x), 0, cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol(c_message, message, sizeof(c_message), 0, cudaMemcpyHostToDevice);
 }
 
 __global__
@@ -234,21 +287,16 @@ void cubehash512_gpu_hash_80(const uint32_t threads, const uint32_t startNounce,
 		const uint32_t nonce = startNounce + thread;
 
 		uint32_t x[2][2][2][2][2];
-		Init(x);
-
+		uint32_t *xx = (uint32_t *)&x[0][0][0][0][0];
 		uint32_t message[8];
-		// first 32 bytes
-		AS_UINT4(&message[0]) = AS_UINT4(&c_PaddedMessage80[0]);
-		AS_UINT4(&message[4]) = AS_UINT4(&c_PaddedMessage80[4]);
-		Update32(x, message);
 
-		// second 32 bytes
-		AS_UINT4(&message[0]) = AS_UINT4(&c_PaddedMessage80[8]);
-		AS_UINT4(&message[4]) = AS_UINT4(&c_PaddedMessage80[12]);
-		Update32(x, message);
+		*(uint2x4*)&xx[0] = *(uint2x4*)&c_x[0];
+		*(uint2x4*)&xx[8] = *(uint2x4*)&c_x[8];
+		*(uint2x4*)&xx[16] = *(uint2x4*)&c_x[16];
+		*(uint2x4*)&xx[24] = *(uint2x4*)&c_x[24];
+		*(uint2*)&message[0] = *(uint2*)&c_message[0];
+		message[2] = c_message[2];
 
-		// last 16 bytes + Padding
-		AS_UINT4(&message[0]) = AS_UINT4(&c_PaddedMessage80[16]);
 		message[3] = cuda_swab32(nonce);
 		message[4] = 0x80;
 		message[5] = 0;
@@ -256,7 +304,7 @@ void cubehash512_gpu_hash_80(const uint32_t threads, const uint32_t startNounce,
 		message[7] = 0;
 		Update32(x, message);
 
-		uint32_t* output = (uint32_t*) (&g_outhash[(size_t)8 * thread]);
+		uint32_t* output = (uint32_t*)(&g_outhash[(size_t)8 * thread]);
 		Final(x, output);
 	}
 }
@@ -264,11 +312,11 @@ void cubehash512_gpu_hash_80(const uint32_t threads, const uint32_t startNounce,
 __host__
 void cubehash512_cuda_hash_80(const int thr_id, const uint32_t threads, const uint32_t startNounce, uint32_t *d_hash)
 {
-	const uint32_t threadsperblock = 256;
-	dim3 grid((threads + threadsperblock-1)/threadsperblock);
+	const uint32_t threadsperblock = 512;
+	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
 	dim3 block(threadsperblock);
 
-	cubehash512_gpu_hash_80 <<<grid, block>>> (threads, startNounce, (uint64_t*) d_hash);
+	cubehash512_gpu_hash_80 << <grid, block >> > (threads, startNounce, (uint64_t*)d_hash);
 }
 
 #endif

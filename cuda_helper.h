@@ -480,11 +480,11 @@ static __host__ __device__ __forceinline__ uint64_t devectorize(uint2 v) {
 /**
  * uint2 direct ops by c++ operator definitions
  */
-static __device__ __forceinline__ uint2 operator^ (uint2 a, uint2 b) { return make_uint2(a.x ^ b.x, a.y ^ b.y); }
-static __device__ __forceinline__ uint2 operator& (uint2 a, uint2 b) { return make_uint2(a.x & b.x, a.y & b.y); }
-static __device__ __forceinline__ uint2 operator| (uint2 a, uint2 b) { return make_uint2(a.x | b.x, a.y | b.y); }
-static __device__ __forceinline__ uint2 operator~ (uint2 a) { return make_uint2(~a.x, ~a.y); }
-static __device__ __forceinline__ void operator^= (uint2 &a, uint2 b) { a = a ^ b; }
+static __device__ __host__ __forceinline__ uint2 operator^ (uint2 a, uint2 b) { return make_uint2(a.x ^ b.x, a.y ^ b.y); }
+static __device__ __host__ __forceinline__ uint2 operator& (uint2 a, uint2 b) { return make_uint2(a.x & b.x, a.y & b.y); }
+static __device__ __host__ __forceinline__ uint2 operator| (uint2 a, uint2 b) { return make_uint2(a.x | b.x, a.y | b.y); }
+static __device__ __host__ __forceinline__ uint2 operator~ (uint2 a) { return make_uint2(~a.x, ~a.y); }
+static __device__ __host__ __forceinline__ void operator^= (uint2 &a, uint2 b) { a = a ^ b; }
 
 static __device__ __forceinline__ uint2 operator+ (uint2 a, uint2 b) {
 	return vectorize(devectorize(a) + devectorize(b));
