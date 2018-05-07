@@ -4,11 +4,12 @@
 * ==========================(LICENSE BEGIN)============================
 *
 * Copyright (c) 2018 tpruvot
-* Copyright (c) 2018 sp (+60% faster)
+* Copyright (c) 2018 sp (+70% faster)
 */
 
 #include <stdio.h>
 #include <cuda_helper_alexis.h>
+#include <cuda_vectors_alexis.h>
 
 #define TPB 256
 
@@ -249,7 +250,7 @@ static const uint32_t mixtab0[] = {
 	SMIX(S00, S01, S02, S03); \
 	}
 
-#define FUGUE512_F(w, x, y, z) { \
+#define FUGUE512_F1(w) { \
 	TIX4(w, S00, S01, S04, S07, S08, S22, S24, S27, S30); \
 	CMIX36(S33, S34, S35, S01, S02, S03, S15, S16, S17); \
 	SMIX(S33, S34, S35, S00); \
@@ -258,8 +259,9 @@ static const uint32_t mixtab0[] = {
 	CMIX36(S27, S28, S29, S31, S32, S33, S09, S10, S11); \
 	SMIX(S27, S28, S29, S30); \
 	CMIX36(S24, S25, S26, S28, S29, S30, S06, S07, S08); \
-	SMIX(S24, S25, S26, S27); \
-	\
+	SMIX(S24, S25, S26, S27);}
+
+#define FUGUE512_F2(x, y, z) { \
 	TIX4(x, S24, S25, S28, S31, S32, S10, S12, S15, S18); \
 	CMIX36(S21, S22, S23, S25, S26, S27, S03, S04, S05); \
 	SMIX(S21, S22, S23, S24); \
@@ -289,31 +291,17 @@ static const uint32_t mixtab0[] = {
 	SMIX(S27, S28, S29, S30); \
 	CMIX36(S24, S25, S26, S28, S29, S30, S06, S07, S08); \
 	SMIX(S24, S25, S26, S27); \
-	}
-
-
-/*#undef ROL8
-#ifdef __CUDA_ARCH__
-__device__ __forceinline__
-uint32_t ROR8(const uint32_t a) {
-return __byte_perm(a, 0, 0x0321);
 }
-#else
-#define ROL8(u)  ROTL32(u, 8)
-#define ROR8(u)  ROTR32(u, 8)
-#define ROL16(u) ROTL32(u,16)
-#endif
-*/
 
-__constant__ static uint32_t c_data[20];
-__constant__ static uint32_t c_s[36];
+
+__constant__ static __align__(16) uint32_t c_s[36];
 
 __host__
 void x16_fugue512_setBlock_80(void *pdata)
 {
 
 	uint32_t Data[20];
-	uint32_t S[35];
+	uint32_t S[36];
 	uint32_t B[9];
 
 	uint32_t mixtabs[1024];
@@ -351,6 +339,7 @@ void x16_fugue512_setBlock_80(void *pdata)
 	FUGUE512_3((Data[9]), (Data[10]), (Data[11]));
 	FUGUE512_3((Data[12]), (Data[13]), (Data[14]));
 	FUGUE512_3((Data[15]), (Data[16]), (Data[17]));
+	FUGUE512_F1((Data[18]));
 
 
 	S[0] = S00; S[1] = S01; S[2] = S02; S[3] = S03; S[4] = S04; S[5] = S05;
@@ -360,17 +349,12 @@ void x16_fugue512_setBlock_80(void *pdata)
 	S[24] = S24; S[25] = S25; S[26] = S26; S[27] = S27; S[28] = S28; S[29] = S29;
 	S[30] = S30; S[31] = S31; S[32] = S32; S[33] = S33; S[34] = S34; S[35] = S35;
 
-
-	cudaMemcpyToSymbol(c_data, Data, sizeof(c_data), 0, cudaMemcpyHostToDevice);
 	cudaMemcpyToSymbol(c_s, S, sizeof(c_s), 0, cudaMemcpyHostToDevice);
-
-
 }
 
 /***************************************************/
 
-__global__
-__launch_bounds__(TPB, 4)
+__global__ __launch_bounds__(TPB, 4)
 void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce, uint64_t *g_hash)
 {
 	__shared__ uint32_t mixtabs[1024];
@@ -398,17 +382,6 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 	uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	if (thread < threads)
 	{
-		uint32_t Data[20];
-
-		//#pragma unroll
-		//for(int i = 0; i < 10; i++)
-		//	AS_UINT2(&Data[i * 2]) = AS_UINT2(&c_data[i]);
-
-		for (int i = 0; i < 19; i++)
-			Data[i] = c_data[i];
-
-		Data[19] = (startNonce + thread);
-
 		uint32_t S00, S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11;
 		uint32_t S12, S13, S14, S15, S16, S17, S18, S19, S20, S21, S22, S23;
 		uint32_t S24, S25, S26, S27, S28, S29, S30, S31, S32, S33, S34, S35;
@@ -422,28 +395,18 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 		S24 = c_s[24]; S25 = c_s[25]; S26 = c_s[26]; S27 = c_s[27]; S28 = c_s[28]; S29 = c_s[29];
 		S30 = c_s[30]; S31 = c_s[31]; S32 = c_s[32]; S33 = c_s[33]; S34 = c_s[34]; S35 = c_s[35];
 
-
-		/*		FUGUE512_3((Data[ 0]), (Data[ 1]), (Data[ 2]));
-		FUGUE512_3((Data[ 3]), (Data[ 4]), (Data[ 5]));
-		FUGUE512_3((Data[ 6]), (Data[ 7]), (Data[ 8]));
-		FUGUE512_3((Data[ 9]), (Data[10]), (Data[11]));
-		FUGUE512_3((Data[12]), (Data[13]), (Data[14]));
-		FUGUE512_3((Data[15]), (Data[16]), (Data[17]));
-		*/
-
-		FUGUE512_F((Data[18]), (Data[19]), 0/*bchi*/, (80 * 8)/*bclo*/);
+		FUGUE512_F2(((startNonce + thread)), 0/*bchi*/, (80 * 8)/*bclo*/);
 
 		// rotate right state by 3 dwords (S00 = S33, S03 = S00)
 		SUB_ROR3;
 		SUB_ROR9;
 
-#pragma unroll 32
 		for (int i = 0; i < 32; i++) {
 			SUB_ROR3;
 			CMIX36(S00, S01, S02, S04, S05, S06, S18, S19, S20);
 			SMIX(S00, S01, S02, S03);
 		}
-#pragma unroll 13
+
 		for (int i = 0; i < 13; i++) {
 			S04 ^= S00;
 			S09 ^= S00;
@@ -475,6 +438,7 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 		S18 ^= S00;
 		S27 ^= S00;
 
+		uint32_t Data[20];
 		Data[0] = cuda_swab32(S01);
 		Data[1] = cuda_swab32(S02);
 		Data[2] = cuda_swab32(S03);
