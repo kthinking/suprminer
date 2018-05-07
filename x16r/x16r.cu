@@ -259,12 +259,14 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 	int intensity = (device_sm[dev_id] > 500 ) ? 20 : 19;
 	if (strstr(device_name[dev_id], "GTX 1080")) intensity = 21;
 	uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
-	//if (init[thr_id]) throughput = min(throughput, max_nonce - first_nonce);
+	if (init[thr_id]) throughput = min(throughput, max_nonce - first_nonce);
+	throughput &= 0xFFFFFF00; //multiples of 128 due to cubehash_shavite & simd_echo kernels
 
 	if (!init[thr_id])
 	{
 		cudaSetDevice(device_map[thr_id]);
-		if (opt_cudaschedule == -1 && gpu_threads == 1) {
+		if (opt_cudaschedule == -1 && gpu_threads == 1) 
+		{
 			cudaDeviceReset();
 			// reduce cpu usage
 			cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
@@ -327,13 +329,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 	if (s_ntime != ntime) {
 		getAlgoString(&endiandata[1], hashOrder);
 		s_ntime = ntime;
-		s_implemented = true;
 		if (!thr_id) applog(LOG_INFO, "hash order %s (%08x)", hashOrder, ntime);
-	}
-
-	if (!s_implemented) {
-		sleep(1);
-		return -1;
 	}
 
 	cuda_check_cpu_setTarget(ptarget);
@@ -496,7 +492,6 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 
 				break;
 			case BMW:
-
 				if (i == 15)
 				{
 					quark_bmw512_cpu_hash_64_final(thr_id, throughput, NULL, d_hash[thr_id], d_resNonce[thr_id],((uint64_t *)ptarget)[3]);
