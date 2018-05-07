@@ -290,6 +290,7 @@ void x13_fugue512_gpu_hash_64_alexis(uint32_t threads, uint64_t *g_hash)
 			CMIX36(S[ 0], S[ 1], S[ 2], S[ 4], S[ 5], S[ 6], S[18], S[19], S[20]);
 			SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
 		}
+
 		#pragma unroll
 		for (uint32_t i = 0; i < 13; i ++) {
 			S[ 4] ^= S[ 0];	S[ 9] ^= S[ 0];	S[18] ^= S[ 0];	S[27] ^= S[ 0];
@@ -319,81 +320,98 @@ void x13_fugue512_gpu_hash_64_alexis(uint32_t threads, uint64_t *g_hash)
 	}
 }
 
-/***************************************************/
-// The final hash function
-__global__ __launch_bounds__(512,2) /* force 56 registers */
-void x13_fugue512_gpu_hash_64_final_alexis(uint32_t threads,const uint32_t* __restrict__ g_hash,uint32_t* resNonce, const uint64_t target){
+__global__
+__launch_bounds__(256, 3)
+void x13_fugue512_gpu_hash_64_final(uint32_t threads, uint32_t *g_hash, uint32_t* resNonce, const uint64_t target)
+{
+	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 
 	__shared__ uint32_t shared[4][256];
 
-	if(threadIdx.x<256){
+	if (threadIdx.x<256){
 		const uint32_t tmp = mixtab0[threadIdx.x];
 		shared[0][threadIdx.x] = tmp;
 		shared[1][threadIdx.x] = ROR8(tmp);
 		shared[2][threadIdx.x] = ROL16(tmp);
 		shared[3][threadIdx.x] = ROL8(tmp);
 	}
-
-	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	if (thread < threads)
 	{
-		const uint32_t* __restrict__ hash = &g_hash[thread<<4];
 
+		uint32_t *Hash = &g_hash[thread << 4];
+		//		uint8_t h1[64];
+		uint32_t c[16], h[16], m[16];
+		*(uint2x4*)&h[0] = __ldg4((uint2x4*)&Hash[0]);
+		*(uint2x4*)&h[8] = __ldg4((uint2x4*)&Hash[8]);
+
+		for (int i = 0; i < 16; i++)
+		{
+			h[i] = cuda_swab32(h[i]);
+		}
+
+		//		__syncthreads();
+
+		//		*(uint2x4*)&Hash[ 0] = *(uint2x4*)&h[ 0];
+		//		*(uint2x4*)&Hash[ 8] = *(uint2x4*)&h[ 8];
 		uint32_t S[36];
-		uint32_t B[ 9];
-		uint32_t Hash[16];
-		
-		*(uint2x4*)&Hash[0] = __ldg4((uint2x4*)&hash[0]);
-		*(uint2x4*)&Hash[8] = __ldg4((uint2x4*)&hash[8]);
-		__syncthreads();		
-		S[ 0] = S[ 1] = S[ 2] = S[ 3] = S[ 4] = S[ 5] = S[ 6] = S[ 7] = S[ 8] = S[ 9] = S[10] = S[11] = S[12] = S[13] = S[14] = S[15] = S[16] = S[17] = S[18] = S[19] = 0;
-		*(uint2x4*)&S[20] = *(uint2x4*)&c_S[ 0];
-		*(uint2x4*)&S[28] = *(uint2x4*)&c_S[ 8];
+		uint32_t B[9];
 
-		FUGUE512_3(Hash[0x0], Hash[0x1], Hash[0x2]);
-		FUGUE512_3(Hash[0x3], Hash[0x4], Hash[0x5]);
-		FUGUE512_3(Hash[0x6], Hash[0x7], Hash[0x8]);
-		FUGUE512_3(Hash[0x9], Hash[0xA], Hash[0xB]);
-		FUGUE512_3(Hash[0xC], Hash[0xD], Hash[0xE]);
-		FUGUE512_3(Hash[0xF], 0, 512);
+		S[0] = S[1] = S[2] = S[3] = S[4] = S[5] = S[6] = S[7] = S[8] = S[9] = S[10] = S[11] = S[12] = S[13] = S[14] = S[15] = S[16] = S[17] = S[18] = S[19] = 0;
+		*(uint2x4*)&S[20] = *(uint2x4*)&c_S[0];
+#pragma unroll 8
+		for (int i = 0; i<8; i++){
+			S[28 + i] = c_S[i + 8];
+		}
 
-		for (int i = 0; i < 32; i++){
+		FUGUE512_3(h[0x0], h[0x1], h[0x2]);
+		FUGUE512_3(h[0x3], h[0x4], h[0x5]);
+		FUGUE512_3(h[0x6], h[0x7], h[0x8]);
+		FUGUE512_3(h[0x9], h[0xA], h[0xB]);
+		FUGUE512_3(h[0xC], h[0xD], h[0xE]);
+		FUGUE512_3(h[0xF], 0U, 512U);
+
+		for (uint32_t i = 0; i < 32; i += 2){
 			mROR3;
-			CMIX36(S[ 0], S[ 1], S[ 2], S[ 4], S[ 5], S[ 6], S[18], S[19], S[20]);
-			SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);			
+			CMIX36(S[0], S[1], S[2], S[4], S[5], S[6], S[18], S[19], S[20]);
+			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			mROR3;
+			CMIX36(S[0], S[1], S[2], S[4], S[5], S[6], S[18], S[19], S[20]);
+			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
 		}
-		#pragma unroll
-		for (int i = 0; i < 12; i++) {
-			S[ 4] ^= S[ 0];	S[ 9] ^= S[ 0];	S[18] ^= S[ 0];	S[27] ^= S[ 0];
-			mROR9;
-			SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
-			S[ 4] ^= S[ 0];	S[10] ^= S[ 0];	S[18] ^= S[ 0];	S[27] ^= S[ 0];
-			mROR9;
-			SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
-			S[ 4] ^= S[ 0];	S[10] ^= S[ 0];	S[19] ^= S[ 0];	S[27] ^= S[ 0];
-			mROR9;
-			SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
-			S[ 4] ^= S[ 0];	S[10] ^= S[ 0];	S[19] ^= S[ 0];	S[28] ^= S[ 0];
-			mROR8;
-			SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
-		}
-		S[ 4] ^= S[ 0];	S[ 9] ^= S[ 0];	S[18] ^= S[ 0];	S[27] ^= S[ 0];
-		mROR9;
-		SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
-		S[ 4] ^= S[ 0];	S[10] ^= S[ 0];	S[18] ^= S[ 0];	S[27] ^= S[ 0];
-		mROR9;
-		SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
-		S[ 4] ^= S[ 0];	S[10] ^= S[ 0];	S[19] ^= S[ 0];	S[27] ^= S[ 0];
-		mROR9;
-		SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
 
-		S[ 3] = cuda_swab32(S[3]);	S[ 4] = cuda_swab32(S[4]^S[ 0]);
-		
-		const uint64_t check = *(uint64_t*)&S[ 3];
-		if(check <= target){
+#pragma unroll 10
+		for (int i = 0; i < 12; i++) {
+			S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
+			mROR9;
+			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			S[4] ^= S[0];	S[10] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
+			mROR9;
+			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[27] ^= S[0];
+			mROR9;
+			SMIX(shared, S[0], S[1], S[2], S[3]);
+			S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[28] ^= S[0];
+			mROR8;
+			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+		}
+		S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
+		mROR9;
+		SMIX(shared, S[0], S[1], S[2], S[3]);
+		S[4] ^= S[0];	S[10] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
+		mROR9;
+		SMIX(shared, S[0], S[1], S[2], S[3]);
+		S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[27] ^= S[0];
+		mROR9;
+		SMIX(shared, S[0], S[1], S[2], S[3]);
+
+		S[3] = cuda_swab32(S[3]);	S[4] = cuda_swab32(S[4] ^ S[0]);
+
+		const uint64_t check = *(uint64_t*)&S[3];
+		if (check <= target)
+		{
 			uint32_t tmp = atomicExch(&resNonce[0], thread);
 			if (tmp != UINT32_MAX)
-				resNonce[1] = tmp;		
+				resNonce[1] = tmp;
 		}
 	}
 }
@@ -411,13 +429,13 @@ void x13_fugue512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_h
 }
 
 __host__
-void x13_fugue512_cpu_hash_64_final_alexis(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target){
-
-	const uint32_t threadsperblock = 512;
+void x13_fugue512_cpu_hash_64_final_alexis(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target)
+{
+	const uint32_t threadsperblock = 256;
 
 	// berechne wie viele Thread Blocks wir brauchen
 	dim3 grid((threads + threadsperblock-1)/threadsperblock);
 	dim3 block(threadsperblock);
 
-	x13_fugue512_gpu_hash_64_final_alexis<<<grid, block>>>(threads, d_hash,d_resNonce,target);
+	x13_fugue512_gpu_hash_64_final << <grid, block >> >(threads, d_hash, d_resNonce, target);
 }
