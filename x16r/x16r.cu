@@ -43,7 +43,7 @@ extern void tribus_echo512_final(int thr_id, uint32_t threads, uint32_t *d_hash,
 extern void x16_simd_echo512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x11_cubehash_shavite512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void quark_blake512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_outputHash, uint32_t *resNonce, const uint64_t target);
-extern void x13_fugue512_cpu_hash_64_final_alexis(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
+extern void x13_fugue512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 
 
 static uint32_t *d_hash[MAX_GPUS];
@@ -575,7 +575,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			case FUGUE:
 				if (i == 15)
 				{
-					x13_fugue512_cpu_hash_64_final_alexis(thr_id, throughput,d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
+					x13_fugue512_cpu_hash_64_final_sp(thr_id, throughput,d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
 					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
 					work->nonces[0] = h_resNonce[thr_id][0];
 					addstart = true;

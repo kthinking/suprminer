@@ -27,7 +27,7 @@ static unsigned int* d_textures[MAX_GPUS][1];
 #if defined(__CUDA_ARCH__)
 #define mixtab0(x) __ldg(&dmixtab0[(x)])
 #else
-#define mixtab0(x) mixtabs[(x)]
+#define mixtab0(x) mixtab0[(x)]
 #endif
 #define mixtab1(x) mixtabs[(x)+256]
 #define mixtab2(x) mixtabs[(x)+512]
@@ -362,7 +362,7 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 	// load shared mem (with 256 threads)
 	const uint32_t thr = threadIdx.x & 0xFF;
 	const uint32_t tmp = tex1Dfetch(mixTab0Tex, thr);
-	mixtabs[thr] = tmp;
+//	mixtabs[thr] = tmp;
 	mixtabs[thr + 256] = ROR8(tmp);
 	mixtabs[thr + 512] = ROL16(tmp);
 	mixtabs[thr + 768] = ROL8(tmp);
@@ -370,7 +370,7 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 	if (blockDim.x < 256) {
 		const uint32_t thr = (threadIdx.x + 0x80) & 0xFF;
 		const uint32_t tmp = tex1Dfetch(mixTab0Tex, thr);
-		mixtabs[thr] = tmp;
+//		mixtabs[thr] = tmp;
 		mixtabs[thr + 256] = ROR8(tmp);
 		mixtabs[thr + 512] = ROL16(tmp);
 		mixtabs[thr + 768] = ROL8(tmp);
@@ -489,6 +489,7 @@ void x16_fugue512_cpu_free(int thr_id)
 	cudaFree(d_textures[thr_id][0]);
 }
 
+
 __host__
 void x16_fugue512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash)
 {
@@ -499,3 +500,4 @@ void x16_fugue512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_
 
 	x16_fugue512_gpu_hash_80 << <grid, block >> > (threads, startNonce, (uint64_t*)d_hash);
 }
+

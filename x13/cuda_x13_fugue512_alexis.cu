@@ -291,7 +291,7 @@ void x13_fugue512_gpu_hash_64_alexis(uint32_t threads, uint64_t *g_hash)
 			SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]);
 		}
 
-		#pragma unroll
+		//#pragma unroll
 		for (uint32_t i = 0; i < 13; i ++) {
 			S[ 4] ^= S[ 0];	S[ 9] ^= S[ 0];	S[18] ^= S[ 0];	S[27] ^= S[ 0];
 			mROR9;
@@ -379,8 +379,8 @@ void x13_fugue512_gpu_hash_64_final(uint32_t threads, uint32_t *g_hash, uint32_t
 			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
 		}
 
-#pragma unroll 10
-		for (int i = 0; i < 12; i++) {
+		for (int i = 0; i < 12; i++) 
+		{
 			S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 			mROR9;
 			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
@@ -429,7 +429,7 @@ void x13_fugue512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_h
 }
 
 __host__
-void x13_fugue512_cpu_hash_64_final_alexis(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target)
+void x13_fugue512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target)
 {
 	const uint32_t threadsperblock = 256;
 
