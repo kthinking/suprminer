@@ -56,7 +56,7 @@ BOOL WINAPI ConsoleHandler(DWORD);
 #endif
 
 #define PROGRAM_NAME		"ccminer"
-#define LP_SCANTIME		30
+#define LP_SCANTIME		10
 #define HEAVYCOIN_BLKHDR_SZ		84
 #define MNR_BLKHDR_SZ 80
 
@@ -213,7 +213,7 @@ double opt_resume_temp = 0.;
 double opt_resume_diff = 0.;
 double opt_resume_rate = -1.;
 
-int opt_statsavg = 30;
+int opt_statsavg = 10;
 
 #define API_MCAST_CODE "FTW"
 #define API_MCAST_ADDR "224.0.0.75"
