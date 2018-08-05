@@ -39,7 +39,7 @@ static uint32_t h_resNonce[MAX_GPUS][4];
 
 extern void quark_bmw512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
 extern void x11_luffa512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint64_t target, uint32_t *d_resNonce);
-extern void tribus_echo512_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
+extern void x11_echo512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 extern void x16_simd_echo512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x11_cubehash_shavite512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void quark_blake512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_outputHash, uint32_t *resNonce, const uint64_t target);
@@ -259,10 +259,15 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 	uint32_t *ptarget = work->target;
 	const uint32_t first_nonce = pdata[19];
 	const int dev_id = device_map[thr_id];
-	int intensity = (device_sm[dev_id] > 500 ) ? 20 : 19;
+	int intensity = (device_sm[dev_id] > 500 ) ? 20 : 18;
 	if (strstr(device_name[dev_id], "GTX 1080")) intensity = 21;
+	if (strstr(device_name[dev_id], "GTX 1060")) intensity = 19;
+	if (strstr(device_name[dev_id], "GTX 1050")) intensity = 18;
 	uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
-	if (init[thr_id]) throughput = min(throughput, max_nonce - first_nonce);
+	if (init[thr_id])
+	{
+		throughput = min(throughput, max_nonce - first_nonce);
+	}
 	throughput &= 0xFFFFFF00; //multiples of 128 due to cubehash_shavite & simd_echo kernels
 
 	if (!init[thr_id])
@@ -274,7 +279,9 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			// reduce cpu usage
 			cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
 		}
+
 		gpulog(LOG_INFO, thr_id, "%s Intensity: %g ", device_name[dev_id], throughput2intensity(throughput));
+
 
 		quark_blake512_cpu_init(thr_id, throughput);
 		quark_bmw512_cpu_init(thr_id, throughput);
@@ -305,6 +312,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		sleep(2);
 		init[thr_id] = true;
 	}
+	
+
 
 	if (opt_benchmark) {
 		((uint32_t*)ptarget)[7] = 0x003ff;
@@ -312,11 +321,10 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 //		((uint32_t*)pdata)[2] = 0x76543210;
 //		((uint32_t*)pdata)[1] = 0x9A9A9A9A;
 //		((uint32_t*)pdata)[2] = 0x9A9A9A9A;
-//		((uint32_t*)pdata)[1] = 0xAAAAAAAA;
-//		((uint32_t*)pdata)[2] = 0xAAAAAAAA;
-		((uint32_t*)pdata)[1] = 0x9B9B9B9B;
-		((uint32_t*)pdata)[2] = 0x9B9B9B9B;
-
+		((uint32_t*)pdata)[1] = 0xAAAAAAAA;
+		((uint32_t*)pdata)[2] = 0xAAAAAAAA;
+//		((uint32_t*)pdata)[1] = 0x01234567;
+//		((uint32_t*)pdata)[2] = 0x89ABCDEF;
 		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
@@ -551,7 +559,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			case SIMD:
 				if (nextalgo == ECHO)
 				{
-					x16_simd_echo512_cpu_hash_64(thr_id, throughput,d_hash[thr_id]);
+					x16_simd_echo512_cpu_hash_64(thr_id, throughput, d_hash[thr_id] );
 					i = i + 1;
 				}
 				else if (nextalgo == WHIRLPOOL)
@@ -571,20 +579,20 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				else
 				{
-					x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+					x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id],order);
 				}
 				break;
 			case ECHO:
 				if (i == 15)
 				{
-					tribus_echo512_final(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id],((uint64_t *)ptarget)[3]);
+					x11_echo512_cpu_hash_64_final_sp(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
 					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
 					work->nonces[0] = h_resNonce[thr_id][0];
 					addstart = true;
 				}
 				else
 				{
-					x11_echo512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
+					x11_echo512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]); order++;
 				}
 				break;
 			case HAMSI:

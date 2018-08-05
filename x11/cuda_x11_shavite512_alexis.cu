@@ -6,7 +6,7 @@
 #include "cuda_vectors_alexis.h"
 
 #define INTENSIVE_GMF
-#include "cuda_x11_aes_alexis.cuh"
+#include "cuda_x11_aes_sp.cuh"
 
 #define TPB 384
 

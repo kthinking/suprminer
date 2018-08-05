@@ -6,7 +6,7 @@
 
 #include "cuda_helper_alexis.h"
 #include "cuda_vectors_alexis.h"
-#include "cuda_x11_aes_alexis.cuh"
+#include "cuda_x11_aes_sp.cuh"
 
 //--SHAVITE--------------------------------------------
 __device__

@@ -8,7 +8,7 @@
 #include "miner.h"
 #include "cuda_helper_alexis.h"
 #include "cuda_vectors_alexis.h"
-#include "cuda_x11_aes_alexis.cuh"
+#include "cuda_x11_aes_sp.cuh"
 
 //#define INTENSIVE_GMF
 //#include "cuda_x11_aes.cuh"

@@ -602,7 +602,7 @@
     <ClInclude Include="x16r\cuda_x16r.h">
       <Filter>Header Files\CUDA</Filter>
     </ClInclude>
-    <ClInclude Include="x11\cuda_x11_aes_alexis.cuh">
+    <ClInclude Include="x11\cuda_x11_aes_sp.cuh">
       <Filter>Source Files\CUDA\x11</Filter>
     </ClInclude>
   </ItemGroup>
@@ -1000,9 +1000,6 @@
     <CudaCompile Include="x11\cuda_x11_shavite512_alexis.cu">
       <Filter>Source Files\CUDA\x11</Filter>
     </CudaCompile>
-    <CudaCompile Include="x11\cuda_x11_echo_alexis.cu">
-      <Filter>Source Files\CUDA\x11</Filter>
-    </CudaCompile>
     <CudaCompile Include="x15\cuda_x14_shabal512_alexis.cu">
       <Filter>Source Files\CUDA\x15</Filter>
     </CudaCompile>
@@ -1017,6 +1014,9 @@
     </CudaCompile>
     <CudaCompile Include="x16r\x16s.cu">
       <Filter>Source Files\CUDA\x16r</Filter>
+    </CudaCompile>
+    <CudaCompile Include="x11\cuda_x11_echo_sp.cu">
+      <Filter>Source Files\CUDA\x11</Filter>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>

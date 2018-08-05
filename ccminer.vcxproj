@@ -267,7 +267,7 @@
     <ClCompile Include="neoscrypt\neoscrypt.cpp" />
     <ClCompile Include="neoscrypt\neoscrypt-cpu.c" />
     <ClInclude Include="neoscrypt\cuda_vectors.h" />
-    <ClInclude Include="x11\cuda_x11_aes_alexis.cuh" />
+    <ClInclude Include="x11\cuda_x11_aes_sp.cuh" />
     <ClInclude Include="x11\cuda_x11_simd512_sm2.cuh" />
     <ClInclude Include="x16r\cuda_x16r.h" />
     <CudaCompile Include="Algo256\bmw.cu" />
@@ -436,7 +436,7 @@
     <CudaCompile Include="sha256\sha256d.cu" />
     <CudaCompile Include="sha256\cuda_sha256t.cu" />
     <CudaCompile Include="sha256\sha256t.cu" />
-    <CudaCompile Include="x11\cuda_x11_echo_alexis.cu" />
+    <CudaCompile Include="x11\cuda_x11_echo_sp.cu" />
     <CudaCompile Include="x11\cuda_x11_shavite512_alexis.cu" />
     <CudaCompile Include="x13\cuda_x13_fugue512_alexis.cu" />
     <CudaCompile Include="x13\cuda_x13_hamsi512_alexis.cu" />
