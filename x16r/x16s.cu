@@ -39,6 +39,8 @@ extern void x11_echo512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint3
 extern void x14_shabal512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 extern void x17_sha512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
 extern void x11_shavite512_cpu_hash_64_sp_final(int thr_id, uint32_t threads, uint32_t *d_hash, const uint64_t target, uint32_t* resNonce);
+extern void quark_groestl512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
+extern void quark_skein512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint64_t target, uint32_t *d_resNonce);
 extern void x16_simd_echo512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x11_cubehash_shavite512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void quark_blake512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_outputHash, uint32_t *resNonce, const uint64_t target);
@@ -255,11 +257,61 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 	uint32_t *ptarget = work->target;
 	const uint32_t first_nonce = pdata[19];
 	const int dev_id = device_map[thr_id];
-	int intensity = (device_sm[dev_id] > 500) ? 20 : 19;
-	if (strstr(device_name[dev_id], "GTX 1080")) intensity = 21;
-	uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
-	if (init[thr_id]) throughput = min(throughput, max_nonce - first_nonce);
+	//int intensity = (device_sm[dev_id] > 500) ? 20 : 19;
+	//if (strstr(device_name[dev_id], "GTX 1080")) intensity = 21;
+	//uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
+	//if (init[thr_id]) throughput = min(throughput, max_nonce - first_nonce);
+	//throughput &= 0xFFFFFF00; //multiples of 128 due to cubehash_shavite & simd_echo kernels
+
+	uint32_t default_throughput = 1 << 19;
+	bool splitsimd = true;
+	bool merge = false;
+	if ((strstr(device_name[dev_id], "1060")) || (strstr(device_name[dev_id], "P106")))
+	{
+		default_throughput = (1 << 21);
+	}
+	else if ((strstr(device_name[dev_id], "970") || (strstr(device_name[dev_id], "980"))))
+	{
+		default_throughput = (1 << 21);
+	}
+	else if ((strstr(device_name[dev_id], "1050")))
+	{
+		default_throughput = 1 << 20;
+
+	}
+	else if ((strstr(device_name[dev_id], "950")))
+	{
+		default_throughput = 1 << 20;
+
+	}
+	else if ((strstr(device_name[dev_id], "960")))
+	{
+		default_throughput = 1 << 20;
+
+	}
+	else if ((strstr(device_name[dev_id], "750")))
+	{
+		default_throughput = 1 << 20;
+
+	}
+	else if ((strstr(device_name[dev_id], "1070")) || (strstr(device_name[dev_id], "P104")))
+	{
+		default_throughput = (1 << 24); 
+		merge = true;
+	}
+	else if ((strstr(device_name[dev_id], "1080 Ti")) || (strstr(device_name[dev_id], "1080")) || (strstr(device_name[dev_id], "P102")))
+	{
+		default_throughput = (1 << 24);
+		merge = true;
+	}
+	uint32_t throughput = cuda_default_throughput(thr_id, default_throughput);
+	if (init[thr_id])
+	{
+		throughput = min(throughput, max_nonce - first_nonce);
+	}
 	throughput &= 0xFFFFFF00; //multiples of 128 due to cubehash_shavite & simd_echo kernels
+
+	if (throughput > (1 << 22)) splitsimd = true;
 
 	if (!init[thr_id])
 	{
@@ -277,7 +329,16 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		quark_skein512_cpu_init(thr_id, throughput);
 		quark_jh512_cpu_init(thr_id, throughput);
 		x11_shavite512_cpu_init(thr_id, throughput);
-		x11_simd512_cpu_init(thr_id, throughput); // 64
+
+		if (splitsimd)
+		{
+			x11_simd512_cpu_init(thr_id, (throughput >> 8));
+		}
+		else
+		{
+			x11_simd512_cpu_init(thr_id, (throughput));
+		}
+
 		x16_echo512_cuda_init(thr_id, throughput);
 		x16_fugue512_cpu_init(thr_id, throughput);
 		x15_whirlpool_cpu_init(thr_id, throughput, 0);
@@ -499,7 +560,17 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 
 				break;
 			case GROESTL:
-				quark_groestl512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				if (i == 15)
+				{
+					quark_groestl512_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
+					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+					work->nonces[0] = h_resNonce[thr_id][0];
+					addstart = true;
+				}
+				else
+				{
+					quark_groestl512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				}
 				break;
 			case JH:
 				quark_jh512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
@@ -509,7 +580,17 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 				quark_keccak512_cpu_hash_64(thr_id, throughput, NULL, d_hash[thr_id]); order++;
 				break;
 			case SKEIN:
-				quark_skein512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				if (i == 15)
+				{
+					quark_skein512_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], ((uint64_t *)ptarget)[3], d_resNonce[thr_id]);
+					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+					work->nonces[0] = h_resNonce[thr_id][0];
+					addstart = true;
+				}
+				else
+				{
+					quark_skein512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				}
 				break;
 			case LUFFA:
 				if (i == 15)
@@ -549,29 +630,74 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				break;
 			case SIMD:
-				if (nextalgo == ECHO)
+				if (!splitsimd)
 				{
-					x16_simd_echo512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
-					i = i + 1;
-				} 
-				else if (nextalgo == WHIRLPOOL)
-				{
-					x16_simd_whirlpool512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
-					i = i + 1;
-				}
-				else if (nextalgo == HAMSI)
-				{
-					x16_simd_hamsi512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
-					i = i + 1;
-				}
-				else if (nextalgo == FUGUE)
-				{
-					x16_simd_fugue512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
-					i = i + 1;
+					if (nextalgo == ECHO)
+					{
+						x16_simd_echo512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
+						i = i + 1;
+					}
+					else if (nextalgo == WHIRLPOOL)
+					{
+						x16_simd_whirlpool512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
+						i = i + 1;
+					}
+					else if (nextalgo == HAMSI)
+					{
+						x16_simd_hamsi512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
+						i = i + 1;
+					}
+					else if (nextalgo == FUGUE)
+					{
+						x16_simd_fugue512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
+						i = i + 1;
+					}
+					else
+					{
+						x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order);
+					}
 				}
 				else
 				{
-					x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+					if (nextalgo == ECHO)
+					{
+						for (int j = 0; j < 256; j += 16)
+						{
+							x16_simd_echo512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
+						}
+						i = i + 1;
+					}
+					else if (nextalgo == WHIRLPOOL)
+					{
+						for (int j = 0; j < 256; j += 16)
+						{
+							x16_simd_whirlpool512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
+						}
+						i = i + 1;
+					}
+					else if (nextalgo == HAMSI)
+					{
+						for (int j = 0; j < 256; j += 16)
+						{
+							x16_simd_hamsi512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
+						}
+						i = i + 1;
+					}
+					else if (nextalgo == FUGUE)
+					{
+						for (int j = 0; j < 256; j += 16)
+						{
+							x16_simd_fugue512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
+						}
+						i = i + 1;
+					}
+					else
+					{
+						for (int j = 0; j < 256; j += 16)
+						{
+							x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order);
+						}
+					}
 				}
 				break;
 			case ECHO:
