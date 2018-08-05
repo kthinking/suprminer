@@ -33,6 +33,11 @@ static unsigned int* d_textures[MAX_GPUS][1];
 #define mixtab2(x) mixtabs[(x)+512]
 #define mixtab3(x) mixtabs[(x)+768]
 
+
+#define mixtab3_i(x) ROL8(__ldg(&dmixtab0[(x)]))
+#define mixtab1_i(x) ROR8(__ldg(&dmixtab0[(x)]))
+
+
 static texture<unsigned int, 1, cudaReadModeElementType> mixTab0Tex;
 
 
@@ -122,8 +127,68 @@ static const uint32_t mixtab0[] = {
 	x18 ^= x04; \
 	x19 ^= x05; \
 	x20 ^= x06; \
-	}
+			}
 
+#if defined(__CUDA_ARCH__) 
+#define SMIX(x0, x1, x2, x3) { \
+	uint32_t tmp; \
+	uint32_t r0 = 0; \
+	uint32_t r1 = 0; \
+	uint32_t r2 = 0; \
+	uint32_t r3 = 0; \
+	uint32_t c0 = mixtab0(x0 >> 24); \
+	tmp = mixtab1((x0 >> 16) & 0xFF); \
+	c0 ^= tmp; \
+	r1 ^= tmp; \
+	tmp = mixtab2((x0 >>  8) & 0xFF); \
+	c0 ^= tmp; \
+	r2 ^= tmp; \
+	tmp = mixtab3(x0 & 0xFF); \
+	c0 ^= tmp; \
+	r3 ^= tmp; \
+	tmp = mixtab0(x1 >> 24); \
+	uint32_t c1 = tmp; \
+	r0 ^= tmp; \
+	tmp = mixtab1((x1 >> 16) & 0xFF); \
+	c1 ^= tmp; \
+	tmp = mixtab2((x1 >>  8) & 0xFF); \
+	c1 ^= tmp; \
+	r2 ^= tmp; \
+	tmp = mixtab3_i(x1 & 0xFF); \
+	c1 ^= tmp; \
+	r3 ^= tmp; \
+	tmp = mixtab0(x2 >> 24); \
+	uint32_t c2 = tmp; \
+	r0 ^= tmp; \
+	tmp = mixtab1((x2 >> 16) & 0xFF); \
+	c2 ^= tmp; \
+	r1 ^= tmp; \
+	tmp = mixtab2((x2 >>  8) & 0xFF); \
+	c2 ^= tmp; \
+	tmp = mixtab3_i(x2 & 0xFF); \
+	c2 ^= tmp; \
+	r3 ^= tmp; \
+	tmp = mixtab0(x3 >> 24); \
+	uint32_t c3 = tmp; \
+	r0 ^= tmp; \
+	tmp = mixtab1((x3 >> 16) & 0xFF); \
+	c3 ^= tmp; \
+	r1 ^= tmp; \
+	tmp = mixtab2((x3 >>  8) & 0xFF); \
+	c3 ^= tmp; \
+	r2 ^= tmp; \
+	tmp = mixtab3(x3 & 0xFF); \
+	c3 ^= tmp; \
+	x0 = ((c0 ^ r0) & 0xFF000000) | ((c1 ^ r1) & 0x00FF0000)\
+		| ((c2 ^ r2) & 0x0000FF00) | ((c3 ^ r3) & 0x000000FF); \
+	x1 = ((c1 ^ (r0 <<  8)) & 0xFF000000) | ((c2 ^ (r1 <<  8)) & 0x00FF0000) \
+		| ((c3 ^ (r2 <<  8)) & 0x0000FF00) | ((c0 ^ (r3 >> 24)) & 0x000000FF); \
+	x2 = ((c2 ^ (r0 << 16)) & 0xFF000000) | ((c3 ^ (r1 << 16)) & 0x00FF0000) \
+		| ((c0 ^ (r2 >> 16)) & 0x0000FF00) | ((c1 ^ (r3 >> 16)) & 0x000000FF); \
+	x3 = ((c3 ^ (r0 << 24)) & 0xFF000000) | ((c0 ^ (r1 >>  8)) & 0x00FF0000) \
+		| ((c1 ^ (r2 >>  8)) & 0x0000FF00) | ((c2 ^ (r3 >>  8)) & 0x000000FF); \
+			} 
+#else
 #define SMIX(x0, x1, x2, x3) { \
 	uint32_t tmp; \
 	uint32_t r0 = 0; \
@@ -173,7 +238,7 @@ static const uint32_t mixtab0[] = {
 	r2 ^= tmp; \
 	tmp = mixtab3(x3 & 0xFF); \
 	c3 ^= tmp; \
-	x0 = ((c0 ^ r0) & 0xFF000000) | ((c1 ^ r1) & 0x00FF0000) \
+	x0 = ((c0 ^ r0) & 0xFF000000) | ((c1 ^ r1) & 0x00FF0000)\
 		| ((c2 ^ r2) & 0x0000FF00) | ((c3 ^ r3) & 0x000000FF); \
 	x1 = ((c1 ^ (r0 <<  8)) & 0xFF000000) | ((c2 ^ (r1 <<  8)) & 0x00FF0000) \
 		| ((c3 ^ (r2 <<  8)) & 0x0000FF00) | ((c0 ^ (r3 >> 24)) & 0x000000FF); \
@@ -181,15 +246,33 @@ static const uint32_t mixtab0[] = {
 		| ((c0 ^ (r2 >> 16)) & 0x0000FF00) | ((c1 ^ (r3 >> 16)) & 0x000000FF); \
 	x3 = ((c3 ^ (r0 << 24)) & 0xFF000000) | ((c0 ^ (r1 >>  8)) & 0x00FF0000) \
 		| ((c1 ^ (r2 >>  8)) & 0x0000FF00) | ((c2 ^ (r3 >>  8)) & 0x000000FF); \
-	}
+		} 
+#endif
 
+/*x0 = ((c0 ^ r0) & 0xFF000000) | ((c1 ^ r1) & 0x00FF0000)			\
+| ((c2 ^ r2) & 0x0000FF00) | ((c3 ^ r3) & 0x000000FF); \
+x1 = ((c1 ^ (r0 << 8)) & 0xFF000000) | ((c2 ^ (r1 << 8)) & 0x00FF0000) \
+| ((c3 ^ (r2 << 8)) & 0x0000FF00) | ((c0 ^ (r3 >> 24)) & 0x000000FF); \
+x2 = ((c2 ^ (r0 << 16)) & 0xFF000000) | ((c3 ^ (r1 << 16)) & 0x00FF0000) \
+| ((c0 ^ (r2 >> 16)) & 0x0000FF00) | ((c1 ^ (r3 >> 16)) & 0x000000FF); \
+x3 = ((c3 ^ (r0 << 24)) & 0xFF000000) | ((c0 ^ (r1 >> 8)) & 0x00FF0000) \
+| ((c1 ^ (r2 >> 8)) & 0x0000FF00) | ((c2 ^ (r3 >> 8)) & 0x000000FF); \
+
+x0 = __byte_perm(c0, c1, 0x0516);
+x1 = __byte_perm(c2, c3, 0x2638);
+x0 = __byte_perm(x0, x1, 0x0145);
+x2 = __byte_perm(r0, r1, 0x0516);
+x3 = __byte_perm(r2, r3, 0x2638);
+x2 = __byte_perm(x2, x3, 0x0145);
+x0 ^= x2;
+*/
 #define SUB_ROR3 { \
 	B33 = S33, B34 = S34, B35 = S35; \
 	S35 = S32; S34 = S31; S33 = S30; S32 = S29; S31 = S28; S30 = S27; S29 = S26; S28 = S25; S27 = S24; \
 	S26 = S23; S25 = S22; S24 = S21; S23 = S20; S22 = S19; S21 = S18; S20 = S17; S19 = S16; S18 = S15; \
 	S17 = S14; S16 = S13; S15 = S12; S14 = S11; S13 = S10; S12 = S09; S11 = S08; S10 = S07; S09 = S06; \
 	S08 = S05; S07 = S04; S06 = S03; S05 = S02; S04 = S01; S03 = S00; S02 = B35; S01 = B34; S00 = B33; \
-	}
+			}
 
 #define SUB_ROR8 { \
 	B28 = S28, B29 = S29, B30 = S30, B31 = S31, B32 = S32, B33 = S33, B34 = S34, B35 = S35; \
@@ -197,7 +280,7 @@ static const uint32_t mixtab0[] = {
 	S26 = S18; S25 = S17; S24 = S16; S23 = S15; S22 = S14; S21 = S13; S20 = S12; S19 = S11; S18 = S10; \
 	S17 = S09; S16 = S08; S15 = S07; S14 = S06; S13 = S05; S12 = S04; S11 = S03; S10 = S02; S09 = S01; \
 	S08 = S00; S07 = B35; S06 = B34; S05 = B33; S04 = B32; S03 = B31; S02 = B30; S01 = B29; S00 = B28; \
-	}
+			}
 
 #define SUB_ROR9 { \
 	B27 = S27, B28 = S28, B29 = S29, B30 = S30, B31 = S31, B32 = S32, B33 = S33, B34 = S34, B35 = S35; \
@@ -205,18 +288,18 @@ static const uint32_t mixtab0[] = {
 	S26 = S17; S25 = S16; S24 = S15; S23 = S14; S22 = S13; S21 = S12; S20 = S11; S19 = S10; S18 = S09; \
 	S17 = S08; S16 = S07; S15 = S06; S14 = S05; S13 = S04; S12 = S03; S11 = S02; S10 = S01; S09 = S00; \
 	S08 = B35; S07 = B34; S06 = B33; S05 = B32; S04 = B31; S03 = B30; S02 = B29; S01 = B28; S00 = B27; \
-	}
+			}
 
 #define SUB_ROR9_3 { \
 	SUB_ROR3; SUB_ROR3; SUB_ROR3; \
-	}
+			}
 
 #define SUB_ROR12 { /* to fix */ \
 	B24 = S00; B25 = S01; B26 = S02; B27 = S03; B28 = S04; B29 = S05; B30 = S06; B31 = S07; B32 = S08; B33 = S09; B34 = S10; B35 = S11; \
 	S00 = S12; S01 = S13; S02 = S14; S03 = S15; S04 = S16; S05 = S17; S06 = S18; S07 = S19; S08 = S20; S09 = S21; S10 = S22; S11 = S23; \
 	S12 = S24; S13 = S25; S14 = S26; S15 = S27; S16 = S28; S17 = S29; S18 = S30; S19 = S31; S20 = S32; S21 = S33; S22 = S34; S23 = S35; \
 	S24 = B24; S25 = B25; S26 = B26; S27 = B27; S28 = B28; S29 = B29; S30 = B30; S31 = B31; S32 = B32; S33 = B33; S34 = B34; S35 = B35; \
-	}
+			}
 
 #define FUGUE512_3(x, y, z) { \
 	TIX4(x, S00, S01, S04, S07, S08, S22, S24, S27, S30); \
@@ -248,7 +331,7 @@ static const uint32_t mixtab0[] = {
 	SMIX(S03, S04, S05, S06); \
 	CMIX36(S00, S01, S02, S04, S05, S06, S18, S19, S20); \
 	SMIX(S00, S01, S02, S03); \
-	}
+			}
 
 #define FUGUE512_F1(w) { \
 	TIX4(w, S00, S01, S04, S07, S08, S22, S24, S27, S30); \
@@ -291,7 +374,7 @@ static const uint32_t mixtab0[] = {
 	SMIX(S27, S28, S29, S30); \
 	CMIX36(S24, S25, S26, S28, S29, S30, S06, S07, S08); \
 	SMIX(S24, S25, S26, S27); \
-}
+		}
 
 
 __constant__ static __align__(16) uint32_t c_s[36];
@@ -316,9 +399,9 @@ void x16_fugue512_setBlock_80(void *pdata)
 		uint32_t tmp = mixtab0[i];
 
 		mixtabs[i] = tmp;
-		mixtabs[i + 256] = ROTR32(tmp,8);
-		mixtabs[i + 512] = ROTL32(tmp,16);
-		mixtabs[i + 768] = ROTL32(tmp,8);
+		mixtabs[i + 256] = ROTR32(tmp, 8);
+		mixtabs[i + 512] = ROTL32(tmp, 16);
+		mixtabs[i + 768] = ROTL32(tmp, 8);
 	}
 
 	uint32_t S00, S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11;
@@ -362,7 +445,7 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 	// load shared mem (with 256 threads)
 	const uint32_t thr = threadIdx.x & 0xFF;
 	const uint32_t tmp = tex1Dfetch(mixTab0Tex, thr);
-//	mixtabs[thr] = tmp;
+	//	mixtabs[thr] = tmp;
 	mixtabs[thr + 256] = ROR8(tmp);
 	mixtabs[thr + 512] = ROL16(tmp);
 	mixtabs[thr + 768] = ROL8(tmp);
@@ -370,7 +453,7 @@ void x16_fugue512_gpu_hash_80(const uint32_t threads, const uint32_t startNonce,
 	if (blockDim.x < 256) {
 		const uint32_t thr = (threadIdx.x + 0x80) & 0xFF;
 		const uint32_t tmp = tex1Dfetch(mixTab0Tex, thr);
-//		mixtabs[thr] = tmp;
+		//		mixtabs[thr] = tmp;
 		mixtabs[thr + 256] = ROR8(tmp);
 		mixtabs[thr + 512] = ROL16(tmp);
 		mixtabs[thr + 768] = ROL8(tmp);
@@ -500,4 +583,5 @@ void x16_fugue512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_
 
 	x16_fugue512_gpu_hash_80 << <grid, block >> > (threads, startNonce, (uint64_t*)d_hash);
 }
+
 

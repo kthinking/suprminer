@@ -322,7 +322,7 @@ void x13_fugue512_gpu_hash_64_alexis(uint32_t threads, uint64_t *g_hash)
 
 __global__
 __launch_bounds__(256, 3)
-void x13_fugue512_gpu_hash_64_final(uint32_t threads, uint32_t *g_hash, uint32_t* resNonce, const uint64_t target)
+void x13_fugue512_gpu_hash_64_final_sp(uint32_t threads, uint32_t *g_hash, uint32_t* resNonce, const uint64_t target)
 {
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 
@@ -379,8 +379,34 @@ void x13_fugue512_gpu_hash_64_final(uint32_t threads, uint32_t *g_hash, uint32_t
 			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
 		}
 
-		for (int i = 0; i < 12; i++) 
-		{
+		/*#pragma unroll 11
+		for (uint32_t i = 0; i < 13; i++) {
+		S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
+		mROR9;
+		SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+		S[4] ^= S[0];	S[10] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
+		mROR9;
+		SMIX(shared, S[0], S[1], S[2], S[3]);
+		S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[27] ^= S[0];
+		mROR9;
+		SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+		S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[28] ^= S[0];
+		mROR8;
+		SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+		}
+		S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
+
+		S[0] = cuda_swab32(S[1]);	S[1] = cuda_swab32(S[2]);	S[2] = cuda_swab32(S[3]);	S[3] = cuda_swab32(S[4]);
+		S[4] = cuda_swab32(S[9]);	S[5] = cuda_swab32(S[10]);	S[6] = cuda_swab32(S[11]);	S[7] = cuda_swab32(S[12]);
+		S[8] = cuda_swab32(S[18]);	S[9] = cuda_swab32(S[19]);	S[10] = cuda_swab32(S[20]);	S[11] = cuda_swab32(S[21]);
+		S[12] = cuda_swab32(S[27]);	S[13] = cuda_swab32(S[28]);	S[14] = cuda_swab32(S[29]);	S[15] = cuda_swab32(S[30]);
+
+		*(uint2x4*)&Hash[0] = *(uint2x4*)&S[0];
+		*(uint2x4*)&Hash[8] = *(uint2x4*)&S[8];
+		*/
+
+		//#pragma unroll 10
+		for (int i = 0; i < 12; i++) {
 			S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 			mROR9;
 			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
@@ -437,5 +463,5 @@ void x13_fugue512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d
 	dim3 grid((threads + threadsperblock-1)/threadsperblock);
 	dim3 block(threadsperblock);
 
-	x13_fugue512_gpu_hash_64_final << <grid, block >> >(threads, d_hash, d_resNonce, target);
+	x13_fugue512_gpu_hash_64_final_sp << <grid, block >> >(threads, d_hash, d_resNonce, target);
 }
