@@ -437,11 +437,12 @@
     <CudaCompile Include="sha256\cuda_sha256t.cu" />
     <CudaCompile Include="sha256\sha256t.cu" />
     <CudaCompile Include="x11\cuda_x11_echo_sp.cu" />
-    <CudaCompile Include="x11\cuda_x11_shavite512_alexis.cu" />
+    <CudaCompile Include="x11\cuda_x11_shavite512_sp.cu" />
     <CudaCompile Include="x13\cuda_x13_fugue512_sp.cu" />
     <CudaCompile Include="x13\cuda_x13_hamsi512_alexis.cu" />
     <CudaCompile Include="x15\cuda_x14_shabal512_sp.cu" />
     <CudaCompile Include="x15\cuda_x15_whirlpool_sm3.cu" />
+    <CudaCompile Include="x16r\cuda_x16_shavite512.cu" />
     <CudaCompile Include="x16r\x16r.cu" />
     <CudaCompile Include="x16r\x16s.cu" />
     <CudaCompile Include="x16r\cuda_x16_echo512.cu" />
