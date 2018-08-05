@@ -40,6 +40,7 @@ static uint32_t h_resNonce[MAX_GPUS][4];
 extern void quark_bmw512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
 extern void x11_luffa512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint64_t target, uint32_t *d_resNonce);
 extern void x11_echo512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
+extern void x14_shabal512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 extern void x16_simd_echo512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x11_cubehash_shavite512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void quark_blake512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_outputHash, uint32_t *resNonce, const uint64_t target);
@@ -321,8 +322,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 //		((uint32_t*)pdata)[2] = 0x76543210;
 //		((uint32_t*)pdata)[1] = 0x9A9A9A9A;
 //		((uint32_t*)pdata)[2] = 0x9A9A9A9A;
-		((uint32_t*)pdata)[1] = 0xAAAAAAAA;
-		((uint32_t*)pdata)[2] = 0xAAAAAAAA;
+		((uint32_t*)pdata)[1] = 0xDDDDDDDD;
+		((uint32_t*)pdata)[2] = 0xDDDDDDDD;
 //		((uint32_t*)pdata)[1] = 0x01234567;
 //		((uint32_t*)pdata)[2] = 0x89ABCDEF;
 		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
@@ -612,7 +613,17 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				break;
 			case SHABAL:
-            	x14_shabal512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
+				if (i == 15)
+				{
+					x14_shabal512_cpu_hash_64_final_sp(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
+					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+					work->nonces[0] = h_resNonce[thr_id][0];
+					addstart = true;
+				}
+				else
+				{
+					x14_shabal512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]); order++;
+				}
 				break;
 			case WHIRLPOOL:
 				x15_whirlpool_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
