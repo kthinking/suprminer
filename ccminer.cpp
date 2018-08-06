@@ -2494,7 +2494,7 @@ static void *miner_thread(void *userdata)
 			rc = scanhash_x11evo(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_X11:
-			rc = scanhash_x11(thr_id, &work, max_nonce, &hashes_done);
+			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done,true);
 			break;
 		case ALGO_X13:
 			rc = scanhash_x13(thr_id, &work, max_nonce, &hashes_done);
@@ -2506,7 +2506,7 @@ static void *miner_thread(void *userdata)
 			rc = scanhash_x15(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_X16R:
-			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
+			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done,false);
 			break;
                 case ALGO_X16S:
                         rc = scanhash_x16s(thr_id, &work, max_nonce, &hashes_done);
