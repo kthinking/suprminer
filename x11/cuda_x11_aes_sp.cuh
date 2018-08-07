@@ -1,3 +1,9 @@
+/*
+Based upon the 2 Christians,klaus_t's, Tanguy Pruvot's and SP's work (2013-2016)
+Provos Alexis - 2016
+optimized by sp - 2018 (+40% faster on the gtx 1080ti)
+*/
+
 #include "miner.h"
 #include "cuda_vectors_alexis.h"
 
@@ -62,6 +68,45 @@ void aes_gpu_init256(uint32_t sharedMemory[4][256])
 	sharedMemory[2][threadIdx.x] = ROL16(temp);
 	sharedMemory[3][threadIdx.x] = ROR8(temp);
 }
+__device__ __forceinline__
+void aes_gpu_init256_32(uint32_t sharedMemory[1024*8])
+{
+	/* each thread startup will fill a uint32 */
+	const uint32_t thread = threadIdx.x << 5;
+	uint32_t temp = __ldg(&d_AES0[threadIdx.x]);
+	sharedMemory[thread] = temp;
+	sharedMemory[1 + thread] = temp;
+	sharedMemory[2 + thread] = temp;
+	sharedMemory[3 + thread] = temp;
+	sharedMemory[4 + thread] = temp;
+	sharedMemory[5 + thread] = temp;
+	sharedMemory[6 + thread] = temp;
+	sharedMemory[7 + thread] = temp;
+	sharedMemory[8 + thread] = temp;
+	sharedMemory[9 + thread] = temp;
+	sharedMemory[10 + thread] = temp;
+	sharedMemory[11 + thread] = temp;
+	sharedMemory[12 + thread] = temp;
+	sharedMemory[13 + thread] = temp;
+	sharedMemory[14 + thread] = temp;
+	sharedMemory[15 + thread] = temp;
+	sharedMemory[16 + thread] = temp;
+	sharedMemory[17 + thread] = temp;
+	sharedMemory[18 + thread] = temp;
+	sharedMemory[19 + thread] = temp;
+	sharedMemory[20 + thread] = temp;
+	sharedMemory[21 + thread] = temp;
+	sharedMemory[22 + thread] = temp;
+	sharedMemory[23 + thread] = temp;
+	sharedMemory[24 + thread] = temp;
+	sharedMemory[25 + thread] = temp;
+	sharedMemory[26 + thread] = temp;
+	sharedMemory[27 + thread] = temp;
+	sharedMemory[28 + thread] = temp;
+	sharedMemory[29 + thread] = temp;
+	sharedMemory[30 + thread] = temp;
+	sharedMemory[31 + thread] = temp;
+}
 
 __device__ __forceinline__
 void aes_gpu_init128(uint32_t sharedMemory[4][256])
@@ -78,7 +123,6 @@ void aes_gpu_init128(uint32_t sharedMemory[4][256])
 	sharedMemory[3][(threadIdx.x << 1) + 0] = ROR8(temp.x);
 	sharedMemory[3][(threadIdx.x << 1) + 1] = ROR8(temp.y);
 }
-
 
 __device__ __forceinline__
 void aes_gpu_init64(uint32_t sharedMemory[4][256])
@@ -210,6 +254,32 @@ static void aes_round(const uint32_t sharedMemory[4][256], const uint32_t x0, co
 }
 
 __device__ __forceinline__
+static void aes_round_32(const uint32_t sharedMemory[1024*8], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, const uint32_t k0, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3)
+{
+	y0 = sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4440) << 5)];
+	y0 ^= ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4441) << 5))]);
+	y0 ^= k0;
+	y0 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4442) << 5))]);
+	y0 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4443) << 5))]);
+
+	y3 = ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4441) << 5))]);
+	y3 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4442) << 5))]);
+	y3 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4443) << 5))]);
+	y3 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4440) << 5)];
+
+	y2 = ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4442) << 5)]);
+	y2 ^= ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4443) << 5)]);
+	y2 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4440) << 5)];
+	y2 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4441) << 5)]);
+
+	y1 = ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4443) << 5)]);
+	y1 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4440) << 5)];
+	y1 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4441) << 5)]);
+	y1 ^= ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4442) << 5)]);
+}
+
+
+__device__ __forceinline__
 static void aes_round_LDG(const uint32_t sharedMemory[4][256], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, const uint32_t k0, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3){
 
 	y0 = __ldg(&d_AES0[x0 & 0xff]);
@@ -232,6 +302,31 @@ static void aes_round_LDG(const uint32_t sharedMemory[4][256], const uint32_t x0
 	y1 ^= sharedMemory[0][x1 & 0xff];
 	y1 ^= sharedMemory[1][__byte_perm(x2, 0, 0x4441)];
 	y1 ^= sharedMemory[2][__byte_perm(x3, 0, 0x4442)];
+}
+
+
+__device__ __forceinline__
+static void aes_round_32(const uint32_t sharedMemory[1024*8], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3)
+{
+	y0 = sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4440) << 5)];
+	y0 ^= ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4441) << 5))]);
+	y0 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4442) << 5))]);
+	y0 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4443) << 5))]);
+
+	y3 = ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4441) << 5))]);
+	y3 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4442) << 5))]);
+	y3 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4443) << 5))]);
+	y3 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4440) << 5)];
+
+	y2 = ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4442) << 5)]);
+	y2 ^= ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4443) << 5)]);
+	y2 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4440) << 5)];
+	y2 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4441) << 5)]);
+
+	y1 = ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4443) << 5)]);
+	y1 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4440) << 5)];
+	y1 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4441) << 5)]);
+	y1 ^= ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4442) << 5)]);
 }
 
 
@@ -300,6 +395,19 @@ __device__ __forceinline__  void AES_2ROUND(const uint32_t sharedMemory[4][256],
 	k0++;
 }
 
+__device__ __forceinline__  void AES_2ROUND_32(const uint32_t sharedMemory[1024*8], uint32_t &x0, uint32_t &x1, uint32_t &x2, uint32_t &x3, uint32_t &k0)
+{
+	uint32_t y0, y1, y2, y3;
+
+	aes_round_32(sharedMemory, x0, x1, x2, x3, k0, y0, y1, y2, y3);
+
+	aes_round_32(sharedMemory, y0, y1, y2, y3, x0, x1, x2, x3);
+
+	// hier werden wir ein carry brauchen (oder auch nicht)
+	k0++;
+}
+
+
 __device__ __forceinline__  void AES_2ROUND_LDG(const uint32_t sharedMemory[4][256], uint32_t &x0, uint32_t &x1, uint32_t &x2, uint32_t &x3, uint32_t &k0)
 {
 	uint32_t y0, y1, y2, y3;
@@ -336,12 +444,39 @@ static void AES_ROUND_NOKEY(const uint32_t sharedMemory[4][256], uint4* x){
 	x->w = y3;
 }
 
+
+__device__ __forceinline__
+static void AES_ROUND_NOKEY_32(const uint32_t sharedMemory[1024*8], uint4* x){
+
+	uint32_t y0, y1, y2, y3;
+	aes_round_32(sharedMemory, x->x, x->y, x->z, x->w, y0, y1, y2, y3);
+
+	x->x = y0;
+	x->y = y1;
+	x->z = y2;
+	x->w = y3;
+}
+
+
 __device__ __forceinline__
 static void KEY_EXPAND_ELT(const uint32_t sharedMemory[4][256], uint32_t *k)
 {
 
 	uint32_t y0, y1, y2, y3;
 	aes_round(sharedMemory, k[0], k[1], k[2], k[3], y0, y1, y2, y3);
+
+	k[0] = y1;
+	k[1] = y2;
+	k[2] = y3;
+	k[3] = y0;
+}
+
+__device__ __forceinline__
+static void KEY_EXPAND_ELT_32(const uint32_t sharedMemory[1024*8], uint32_t *k)
+{
+
+	uint32_t y0, y1, y2, y3;
+	aes_round_32(sharedMemory, k[0], k[1], k[2], k[3], y0, y1, y2, y3);
 
 	k[0] = y1;
 	k[1] = y2;
