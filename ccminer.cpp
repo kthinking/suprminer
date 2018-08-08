@@ -855,10 +855,14 @@ int share_result(int result, int pooln, double sharediff, const char *reason)
 		sprintf(solved, " solved: %u", p->solved_count);
 	}
 
+
 	applog(LOG_NOTICE, "accepted: %lu/%lu (%s), %s %s%s",
 			p->accepted_count,
 			p->accepted_count + p->rejected_count,
 			suppl, s, flag, solved);
+
+	//applog(LOG_NOTICE, "[B/A/T]: %lu/%lu/%lu, diff: %2.3f, %s %s", p->solved_count, p->accepted_count, p->accepted_count + p->rejected_count, sharediff, s, flag);
+
 	if (reason) {
 		applog(LOG_WARNING, "reject reason: %s", reason);
 		if (!check_dups && strncasecmp(reason, "duplicate", 9) == 0) {
@@ -2494,7 +2498,7 @@ static void *miner_thread(void *userdata)
 			rc = scanhash_x11evo(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_X11:
-			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done,true);
+			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_X13:
 			rc = scanhash_x13(thr_id, &work, max_nonce, &hashes_done);
@@ -2506,10 +2510,10 @@ static void *miner_thread(void *userdata)
 			rc = scanhash_x15(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_X16R:
-			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done,false);
+			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
 			break;
-                case ALGO_X16S:
-                        rc = scanhash_x16s(thr_id, &work, max_nonce, &hashes_done);
+        case ALGO_X16S:
+            rc = scanhash_x16s(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_X17:
 			rc = scanhash_x17(thr_id, &work, max_nonce, &hashes_done);
