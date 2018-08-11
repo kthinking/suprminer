@@ -165,14 +165,14 @@ am__ccminer_SOURCES_DIST = elist.h miner.h compat.h compat/inttypes.h \
 	tribus/tribus.cu tribus/cuda_echo512_final.cu x11/x11.cu \
 	x11/fresh.cu x11/cuda_x11_luffa512.cu \
 	x11/cuda_x11_cubehash512.cu x11/cuda_x11_cubehash512_80.cu \
-	x11/cuda_x11_shavite512.cu x11/cuda_x11_shavite512_alexis.cu \
+	x11/cuda_x11_shavite512.cu x11/cuda_x11_shavite512_sp.cu \
 	x11/cuda_x11_simd512.cu x11/cuda_x11_echo.cu \
-	x11/cuda_x11_echo_alexis.cu x11/cuda_x11_luffa512_Cubehash.cu \
+	x11/cuda_x11_echo_sp.cu x11/cuda_x11_luffa512_Cubehash.cu \
 	x11/x11evo.cu x11/timetravel.cu x11/bitcore.cu x13/x13.cu \
-	x13/cuda_x13_hamsi512.cu x13/cuda_x13_hamsi512_alexis.cu \
-	x13/cuda_x13_fugue512.cu x13/cuda_x13_fugue512_alexis.cu \
+	x13/cuda_x13_hamsi512.cu x13/cuda_x13_hamsi512_sp.cu \
+	x13/cuda_x13_fugue512.cu x13/cuda_x13_fugue512_sp.cu \
 	x13/hsr.cu x13/cuda_hsr_sm3.cu x13/sm3.c x15/x14.cu x15/x15.cu \
-	x15/cuda_x14_shabal512.cu x15/cuda_x14_shabal512_alexis.cu \
+	x15/cuda_x14_shabal512.cu x15/cuda_x14_shabal512_sp.cu \
 	x15/cuda_x15_whirlpool.cu x15/whirlpool.cu \
 	x15/cuda_x15_whirlpool_sm3.cu x16r/x16s.cu x16r/x16r.cu \
 	x16r/cuda_x16_echo512.cu x16r/cuda_x16_fugue512.cu \
@@ -272,19 +272,19 @@ am_ccminer_OBJECTS = ccminer-crc32.$(OBJEXT) ccminer-hefty1.$(OBJEXT) \
 	x11/cuda_x11_cubehash512.$(OBJEXT) \
 	x11/cuda_x11_cubehash512_80.$(OBJEXT) \
 	x11/cuda_x11_shavite512.$(OBJEXT) \
-	x11/cuda_x11_shavite512_alexis.$(OBJEXT) \
+	x11/cuda_x11_shavite512_sp.$(OBJEXT) \
 	x11/cuda_x11_simd512.$(OBJEXT) x11/cuda_x11_echo.$(OBJEXT) \
-	x11/cuda_x11_echo_alexis.$(OBJEXT) \
+	x11/cuda_x11_echo_sp.$(OBJEXT) \
 	x11/cuda_x11_luffa512_Cubehash.$(OBJEXT) x11/x11evo.$(OBJEXT) \
 	x11/timetravel.$(OBJEXT) x11/bitcore.$(OBJEXT) \
 	x13/x13.$(OBJEXT) x13/cuda_x13_hamsi512.$(OBJEXT) \
-	x13/cuda_x13_hamsi512_alexis.$(OBJEXT) \
+	x13/cuda_x13_hamsi512_sp.$(OBJEXT) \
 	x13/cuda_x13_fugue512.$(OBJEXT) \
-	x13/cuda_x13_fugue512_alexis.$(OBJEXT) x13/hsr.$(OBJEXT) \
+	x13/cuda_x13_fugue512_sp.$(OBJEXT) x13/hsr.$(OBJEXT) \
 	x13/cuda_hsr_sm3.$(OBJEXT) x13/ccminer-sm3.$(OBJEXT) \
 	x15/x14.$(OBJEXT) x15/x15.$(OBJEXT) \
 	x15/cuda_x14_shabal512.$(OBJEXT) \
-	x15/cuda_x14_shabal512_alexis.$(OBJEXT) \
+	x15/cuda_x14_shabal512_sp.$(OBJEXT) \
 	x15/cuda_x15_whirlpool.$(OBJEXT) x15/whirlpool.$(OBJEXT) \
 	x15/cuda_x15_whirlpool_sm3.$(OBJEXT) x16r/x16s.$(OBJEXT) \
 	x16r/x16r.$(OBJEXT) x16r/cuda_x16_echo512.$(OBJEXT) \
@@ -634,14 +634,14 @@ ccminer_SOURCES = elist.h miner.h compat.h compat/inttypes.h \
 	tribus/tribus.cu tribus/cuda_echo512_final.cu x11/x11.cu \
 	x11/fresh.cu x11/cuda_x11_luffa512.cu \
 	x11/cuda_x11_cubehash512.cu x11/cuda_x11_cubehash512_80.cu \
-	x11/cuda_x11_shavite512.cu x11/cuda_x11_shavite512_alexis.cu \
+	x11/cuda_x11_shavite512.cu x11/cuda_x11_shavite512_sp.cu \
 	x11/cuda_x11_simd512.cu x11/cuda_x11_echo.cu \
-	x11/cuda_x11_echo_alexis.cu x11/cuda_x11_luffa512_Cubehash.cu \
+	x11/cuda_x11_echo_sp.cu x11/cuda_x11_luffa512_Cubehash.cu \
 	x11/x11evo.cu x11/timetravel.cu x11/bitcore.cu x13/x13.cu \
-	x13/cuda_x13_hamsi512.cu x13/cuda_x13_hamsi512_alexis.cu \
-	x13/cuda_x13_fugue512.cu x13/cuda_x13_fugue512_alexis.cu \
+	x13/cuda_x13_hamsi512.cu x13/cuda_x13_hamsi512_sp.cu \
+	x13/cuda_x13_fugue512.cu x13/cuda_x13_fugue512_sp.cu \
 	x13/hsr.cu x13/cuda_hsr_sm3.cu x13/sm3.c x15/x14.cu x15/x15.cu \
-	x15/cuda_x14_shabal512.cu x15/cuda_x14_shabal512_alexis.cu \
+	x15/cuda_x14_shabal512.cu x15/cuda_x14_shabal512_sp.cu \
 	x15/cuda_x15_whirlpool.cu x15/whirlpool.cu \
 	x15/cuda_x15_whirlpool_sm3.cu x16r/x16s.cu x16r/x16r.cu \
 	x16r/cuda_x16_echo512.cu x16r/cuda_x16_fugue512.cu \
@@ -1108,13 +1108,13 @@ x11/cuda_x11_cubehash512_80.$(OBJEXT): x11/$(am__dirstamp) \
 	x11/$(DEPDIR)/$(am__dirstamp)
 x11/cuda_x11_shavite512.$(OBJEXT): x11/$(am__dirstamp) \
 	x11/$(DEPDIR)/$(am__dirstamp)
-x11/cuda_x11_shavite512_alexis.$(OBJEXT): x11/$(am__dirstamp) \
+x11/cuda_x11_shavite512_sp.$(OBJEXT): x11/$(am__dirstamp) \
 	x11/$(DEPDIR)/$(am__dirstamp)
 x11/cuda_x11_simd512.$(OBJEXT): x11/$(am__dirstamp) \
 	x11/$(DEPDIR)/$(am__dirstamp)
 x11/cuda_x11_echo.$(OBJEXT): x11/$(am__dirstamp) \
 	x11/$(DEPDIR)/$(am__dirstamp)
-x11/cuda_x11_echo_alexis.$(OBJEXT): x11/$(am__dirstamp) \
+x11/cuda_x11_echo_sp.$(OBJEXT): x11/$(am__dirstamp) \
 	x11/$(DEPDIR)/$(am__dirstamp)
 x11/cuda_x11_luffa512_Cubehash.$(OBJEXT): x11/$(am__dirstamp) \
 	x11/$(DEPDIR)/$(am__dirstamp)
@@ -1133,11 +1133,11 @@ x13/$(DEPDIR)/$(am__dirstamp):
 x13/x13.$(OBJEXT): x13/$(am__dirstamp) x13/$(DEPDIR)/$(am__dirstamp)
 x13/cuda_x13_hamsi512.$(OBJEXT): x13/$(am__dirstamp) \
 	x13/$(DEPDIR)/$(am__dirstamp)
-x13/cuda_x13_hamsi512_alexis.$(OBJEXT): x13/$(am__dirstamp) \
+x13/cuda_x13_hamsi512_sp.$(OBJEXT): x13/$(am__dirstamp) \
 	x13/$(DEPDIR)/$(am__dirstamp)
 x13/cuda_x13_fugue512.$(OBJEXT): x13/$(am__dirstamp) \
 	x13/$(DEPDIR)/$(am__dirstamp)
-x13/cuda_x13_fugue512_alexis.$(OBJEXT): x13/$(am__dirstamp) \
+x13/cuda_x13_fugue512_sp.$(OBJEXT): x13/$(am__dirstamp) \
 	x13/$(DEPDIR)/$(am__dirstamp)
 x13/hsr.$(OBJEXT): x13/$(am__dirstamp) x13/$(DEPDIR)/$(am__dirstamp)
 x13/cuda_hsr_sm3.$(OBJEXT): x13/$(am__dirstamp) \
@@ -1154,7 +1154,7 @@ x15/x14.$(OBJEXT): x15/$(am__dirstamp) x15/$(DEPDIR)/$(am__dirstamp)
 x15/x15.$(OBJEXT): x15/$(am__dirstamp) x15/$(DEPDIR)/$(am__dirstamp)
 x15/cuda_x14_shabal512.$(OBJEXT): x15/$(am__dirstamp) \
 	x15/$(DEPDIR)/$(am__dirstamp)
-x15/cuda_x14_shabal512_alexis.$(OBJEXT): x15/$(am__dirstamp) \
+x15/cuda_x14_shabal512_sp.$(OBJEXT): x15/$(am__dirstamp) \
 	x15/$(DEPDIR)/$(am__dirstamp)
 x15/cuda_x15_whirlpool.$(OBJEXT): x15/$(am__dirstamp) \
 	x15/$(DEPDIR)/$(am__dirstamp)
