@@ -553,22 +553,36 @@ static uint4 *d_temp4[MAX_GPUS];
 //END OF ECHO MACROS-------------------------
 
 __device__
-static void echo_round(const uint32_t sharedMemory[4][256], uint32_t* W, uint32_t &k0){
+static void echo_round_sp(const uint32_t sharedMemory[8 * 1024], uint32_t *W, uint32_t &k0){
 	// Big Sub Words
+#pragma unroll 16
+	for (int idx = 0; idx < 16; idx++)
+		AES_2ROUND_32(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
+
+	// Shift Rows
 #pragma unroll 4
-	for (int idx = 0; idx < 16; idx++){
-		AES_2ROUND(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
-		idx++;
-		AES_2ROUND_LDG(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
-		idx++;
-		AES_2ROUND_LDG(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
-		idx++;
-		AES_2ROUND(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
+	for (int i = 0; i < 4; i++){
+		uint32_t t[4];
+		/// 1, 5, 9, 13
+		t[0] = W[i + 4];
+		t[1] = W[i + 8];
+		t[2] = W[i + 24];
+		t[3] = W[i + 60];
+		W[i + 4] = W[i + 20];
+		W[i + 8] = W[i + 40];
+		W[i + 24] = W[i + 56];
+		W[i + 60] = W[i + 44];
+
+		W[i + 20] = W[i + 36];
+		W[i + 40] = t[1];
+		W[i + 56] = t[2];
+		W[i + 44] = W[i + 28];
+
+		W[i + 28] = W[i + 12];
+		W[i + 12] = t[3];
+		W[i + 36] = W[i + 52];
+		W[i + 52] = t[0];
 	}
-	uint32_t tmp0;
-	SHIFT_ROW1(4, 20, 36, 52);
-	SHIFT_ROW2(8, 24, 40, 56);
-	SHIFT_ROW1(60, 44, 28, 12);
 	// Mix Columns
 #pragma unroll 4
 	for (int i = 0; i < 4; i++){ // Schleife über je 2*uint32_t
@@ -603,8 +617,7 @@ static void echo_round(const uint32_t sharedMemory[4][256], uint32_t* W, uint32_
 
 
 
-__global__ 
-__launch_bounds__(128,5)
+__global__ __launch_bounds__(128,5)
 static void x11_simd512_gpu_compress_64(uint32_t threads, uint32_t *g_hash,const uint4 *const __restrict__ g_fft4)
 {
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x)>>3;
@@ -798,19 +811,15 @@ static void SIMD_Compress(uint32_t *A, const uint32_t thr_offset, const uint4 *c
 
 
 __global__
-#if __CUDA_ARCH__ > 500
-__launch_bounds__(128, 5)
-#else
-__launch_bounds__(128, 5)
-#endif
+__launch_bounds__(384, 2)
 static void x16_simd512_gpu_compress_64_echo512(uint32_t *g_hash, const uint4 *const __restrict__ g_fft4)
 {
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	const uint32_t thr_offset = thread << 6; // thr_id * 128 (je zwei elemente)
 
-	__shared__ uint32_t sharedMemory[4][256];
+	__shared__ uint32_t sharedMemory[1024*8];
 
-	aes_gpu_init128(sharedMemory);
+	aes_gpu_init256_32(sharedMemory);
 
 	const uint32_t P[48] = {
 		0xe7e9f5f5, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xa4213d7e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
@@ -847,7 +856,7 @@ static void x16_simd512_gpu_compress_64_echo512(uint32_t *g_hash, const uint4 *c
 
 #pragma unroll 4
 	for (uint32_t idx = 0; idx < 16; idx += 4)
-		AES_2ROUND(sharedMemory, h[idx + 0], h[idx + 1], h[idx + 2], h[idx + 3], k0);
+		AES_2ROUND_32(sharedMemory, h[idx + 0], h[idx + 1], h[idx + 2], h[idx + 3], k0);
 
 	k0 += 4;
 
@@ -948,7 +957,7 @@ static void x16_simd512_gpu_compress_64_echo512(uint32_t *g_hash, const uint4 *c
 	}
 
 	for (int k = 1; k < 10; k++){
-		echo_round(sharedMemory, W, k0);
+		echo_round_sp(sharedMemory, W, k0);
 	}
 #pragma unroll 4
 	for (uint32_t i = 0; i < 16; i += 4)
@@ -1435,13 +1444,11 @@ void x16_simd_echo512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash
 
 	int dev_id = device_map[thr_id];
 
-	uint32_t tpb = TPB52_1;
-	if (device_sm[dev_id] <= 500) tpb = TPB52_1;
+	uint32_t tpb = 128;
 	const dim3 grid1((8 * threads + tpb - 1) / tpb);
 	const dim3 block1(tpb);
 
-	tpb = 128;
-	if (device_sm[dev_id] <= 500) tpb = 128;
+	tpb = 256;
 	const dim3 grid2((threads + tpb - 1) / tpb);
 	const dim3 block2(tpb);
 
