@@ -33,6 +33,9 @@ extern "C" {
 #include "cuda_helper.h"
 #include "cuda_x16r.h"
 
+static uint32_t *d_resNonce[MAX_GPUS];
+static uint32_t h_resNonce[MAX_GPUS][4];
+
 extern void quark_bmw512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_nonceVector, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
 extern void x11_luffa512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint64_t target, uint32_t *d_resNonce);
 extern void x11_echo512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
@@ -50,11 +53,9 @@ extern void x16_simd_fugue512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t
 extern void x16_simd_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x16_simd_whirlpool512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x13_hamsi512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
+
+
 extern void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
-
-
-static uint32_t *d_resNonce[MAX_GPUS];
-static uint32_t h_resNonce[MAX_GPUS][4];
 
 
 static uint32_t *d_hash[MAX_GPUS];
@@ -100,23 +101,27 @@ static const char* algo_strings[] = {
 };
 
 static __thread uint32_t s_ntime = UINT32_MAX;
+static __thread bool s_implemented = false;
 static __thread char hashOrder[HASH_FUNC_COUNT + 1] = { 0 };
 
 static void getAlgoString(const uint32_t* prevblock, char *output)
 {
-	char *sptr = output;
+
 	uint8_t* data = (uint8_t*)prevblock;
 
-	for (uint8_t j = 0; j < HASH_FUNC_COUNT; j++) {
-		uint8_t b = (15 - j) >> 1; // 16 ascii hex chars, reversed
-		uint8_t algoDigit = (j & 1) ? data[b] & 0xF : data[b] >> 4;
-		if (algoDigit >= 10)
-			sprintf(sptr, "%c", 'A' + (algoDigit - 10));
-		else
-			sprintf(sptr, "%u", (uint32_t)algoDigit);
-		sptr++;
+	strcpy(output, "0123456789ABCDEF");
+
+	for (int i = 0; i < 16; i++){
+		uint8_t b = (15 - i) >> 1; // 16 ascii hex chars, reversed
+		uint8_t algoDigit = (i & 1) ? data[b] & 0xF : data[b] >> 4;
+		int offset = algoDigit;
+		// insert the nth character at the front
+		char oldVal = output[offset];
+		for (int j = offset; j-->0;){
+			output[j + 1] = output[j];
+		}
+		output[0] = oldVal;
 	}
-	*sptr = '\0';
 }
 
 
@@ -393,7 +398,8 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		be32enc(&endiandata[k], pdata[k]);
 
 	uint32_t ntime = swab32(pdata[17]);
-	if (s_ntime != ntime) {
+	if (s_ntime != ntime) 
+	{
 		getAlgoString(&endiandata[1], hashOrder);
 		s_ntime = ntime;
 		if (!thr_id) applog(LOG_INFO, "hash order %s (%08x)", hashOrder, ntime);
