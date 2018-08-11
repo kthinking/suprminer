@@ -48,6 +48,8 @@ extern void x13_fugue512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint
 extern void x16_simd_fugue512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x16_simd_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x16_simd_whirlpool512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x13_hamsi512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 
 
 static uint32_t *d_resNonce[MAX_GPUS];
@@ -714,7 +716,17 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				break;
 			case HAMSI:
-				x13_hamsi512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
+				if (i == 15)
+				{
+					x13_hamsi512_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
+					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+					work->nonces[0] = h_resNonce[thr_id][0];
+					addstart = true;
+				}
+				else
+				{
+					x13_hamsi512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
+				}
 				break;
 			case FUGUE:
 				if (i == 15)
