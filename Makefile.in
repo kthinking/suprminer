@@ -177,6 +177,7 @@ am__ccminer_SOURCES_DIST = elist.h miner.h compat.h compat/inttypes.h \
 	x15/cuda_x15_whirlpool_sm3.cu x16r/x16s.cu x16r/x16r.cu \
 	x16r/cuda_x16_echo512.cu x16r/cuda_x16_fugue512.cu \
 	x16r/cuda_x16_shabal512.cu x16r/cuda_x16_simd512_80.cu \
+	x16r/cuda_x16_shavite512.cu \
 	x17/x17.cu x17/hmq17.cu x17/cuda_x17_haval256.cu \
 	x17/cuda_x17_sha512.cu x11/phi.cu x11/cuda_streebog_maxwell.cu \
 	x11/c11.cu x11/s3.cu x11/sib.cu x11/veltor.cu \
@@ -290,7 +291,9 @@ am_ccminer_OBJECTS = ccminer-crc32.$(OBJEXT) ccminer-hefty1.$(OBJEXT) \
 	x16r/x16r.$(OBJEXT) x16r/cuda_x16_echo512.$(OBJEXT) \
 	x16r/cuda_x16_fugue512.$(OBJEXT) \
 	x16r/cuda_x16_shabal512.$(OBJEXT) \
-	x16r/cuda_x16_simd512_80.$(OBJEXT) x17/x17.$(OBJEXT) \
+	x16r/cuda_x16_simd512_80.$(OBJEXT) \
+	x16r/cuda_x16_shavite512.$(OBJEXT) \ 
+	x17/x17.$(OBJEXT) \
 	x17/hmq17.$(OBJEXT) x17/cuda_x17_haval256.$(OBJEXT) \
 	x17/cuda_x17_sha512.$(OBJEXT) x11/phi.$(OBJEXT) \
 	x11/cuda_streebog_maxwell.$(OBJEXT) x11/c11.$(OBJEXT) \
@@ -645,7 +648,7 @@ ccminer_SOURCES = elist.h miner.h compat.h compat/inttypes.h \
 	x15/cuda_x15_whirlpool.cu x15/whirlpool.cu \
 	x15/cuda_x15_whirlpool_sm3.cu x16r/x16s.cu x16r/x16r.cu \
 	x16r/cuda_x16_echo512.cu x16r/cuda_x16_fugue512.cu \
-	x16r/cuda_x16_shabal512.cu x16r/cuda_x16_simd512_80.cu \
+	x16r/cuda_x16_shabal512.cu x16r/cuda_x16_simd512_80.cu x16r/cuda_x16_shavite512.cu\
 	x17/x17.cu x17/hmq17.cu x17/cuda_x17_haval256.cu \
 	x17/cuda_x17_sha512.cu x11/phi.cu x11/cuda_streebog_maxwell.cu \
 	x11/c11.cu x11/s3.cu x11/sib.cu x11/veltor.cu \
@@ -1180,6 +1183,8 @@ x16r/cuda_x16_shabal512.$(OBJEXT): x16r/$(am__dirstamp) \
 	x16r/$(DEPDIR)/$(am__dirstamp)
 x16r/cuda_x16_simd512_80.$(OBJEXT): x16r/$(am__dirstamp) \
 	x16r/$(DEPDIR)/$(am__dirstamp)
+x16r/cuda_x16_shavite512.$(OBJEXT): x16r/$(am__dirstamp) \
+	x16r/$(DEPDIR)/$(am__dirstamp)	
 x17/$(am__dirstamp):
 	@$(MKDIR_P) x17
 	@: > x17/$(am__dirstamp)
