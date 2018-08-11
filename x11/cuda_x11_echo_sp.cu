@@ -279,7 +279,7 @@ void x11_echo512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_
 	x11_echo512_gpu_hash_64_final_sp<<<grid, block>>>(threads, (uint64_t*)d_hash,d_resNonce,target);
 }
 
-__global__ __global__ __launch_bounds__(384, 2)
+__global__ __launch_bounds__(384, 2)
 static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 {
 	__shared__ uint32_t sharedMemory[8*1024];
