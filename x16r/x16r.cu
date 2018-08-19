@@ -54,6 +54,7 @@ extern void x16_simd_fugue512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t
 extern void x16_simd_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x16_simd_whirlpool512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x13_hamsi512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
+extern void x16_simd_jh512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 
 
 extern void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
@@ -396,8 +397,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		((uint32_t*)ptarget)[7] = 0x003ff;
 //		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 //		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0xAAAAAAAA;	                           
-		((uint32_t*)pdata)[2] = 0xAAAAAAAA;
+		((uint32_t*)pdata)[1] = 0x99999999;
+		((uint32_t*)pdata)[2] = 0x99999999;
 
 //		94E3A654 CBD9B14B
 
@@ -690,12 +691,12 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 					{
 						x16_simd_hamsi512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 						i = i + 1;
-					}
+					}/*
 					else if (nextalgo == FUGUE)
 					{
 						x16_simd_fugue512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 						i = i + 1;
-					}
+					}*/
 					else
 					{
 						x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order);
@@ -736,15 +737,16 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 							x16_simd_hamsi512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
 						}
 						i = i + 1;
-					}
+					}/* Slower with cuda 9.2 / latest driver. 40% slower
 					else if (nextalgo == FUGUE)
 					{
 						for (int j = 0; j < 256; j += 16)
 						{
 							x16_simd_fugue512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
 						}
+						
 						i = i + 1;
-					}
+					}*/
 					else
 					{
 						for (int j = 0; j < 256; j += 16)
@@ -791,7 +793,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				else
 				{
-					x13_fugue512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]);
+					x13_fugue512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]);
 				}
 				break;
 			case SHABAL:

@@ -673,11 +673,11 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 						x16_simd_hamsi512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 						i = i + 1;
 					}
-					else if (nextalgo == FUGUE)
+					/*else if (nextalgo == FUGUE)
 					{
 						x16_simd_fugue512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 						i = i + 1;
-					}
+					}*/
 					else
 					{
 						x11_simd512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order);
@@ -718,7 +718,7 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 							x16_simd_hamsi512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
 						}
 						i = i + 1;
-					}
+					}/*
 					else if (nextalgo == FUGUE)
 					{
 						for (int j = 0; j < 256; j += 16)
@@ -726,7 +726,7 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 							x16_simd_fugue512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
 						}
 						i = i + 1;
-					}
+					}*/
 					else
 					{
 						for (int j = 0; j < 256; j += 16)
@@ -773,7 +773,7 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				else
 				{
-					x13_fugue512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]);
+					x13_fugue512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]);
 				}
 				break;
 			case SHABAL:

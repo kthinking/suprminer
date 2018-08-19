@@ -451,10 +451,6 @@ static void SMIX(const uint32_t shared[4][256], uint32_t &x0, uint32_t &x1, uint
         SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]); \
 	}
 
-//------END OF FUGUE MACROS-------------------------------------------
-
-
-
 #ifdef __INTELLISENSE__
 /* just for vstudio code colors */
 #define __CUDA_ARCH__ 500
@@ -607,14 +603,13 @@ static void echo_round_sp(const uint32_t sharedMemory[8 * 1024], uint32_t *W, ui
 			uint32_t bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
 			uint32_t cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
 
-			W[idx + i] = bc ^ a[3] ^ abx;
-			W[idx + i + 4] = a[0] ^ cd ^ bcx;
-			W[idx + i + 8] = ab ^ a[3] ^ cdx;
-			W[idx + i + 12] = ab ^ a[2] ^ (abx ^ bcx ^ cdx);
+			W[idx + i] = (bc^ a[3] ^ abx);
+			W[idx + i + 4] = xor3(a[0], cd, bcx);
+			W[idx + i + 8] = xor3(ab, a[3], cdx);
+			W[idx + i + 12] = xor3(ab, a[2], xor3(abx, bcx, cdx));
 		}
 	}
 }
-
 
 
 __global__ __launch_bounds__(128,5)
@@ -809,168 +804,6 @@ static void SIMD_Compress(uint32_t *A, const uint32_t thr_offset, const uint4 *c
 }
 
 
-
-__global__
-__launch_bounds__(384, 2)
-static void x16_simd512_gpu_compress_64_echo512(uint32_t *g_hash, const uint4 *const __restrict__ g_fft4)
-{
-	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
-	const uint32_t thr_offset = thread << 6; // thr_id * 128 (je zwei elemente)
-
-	__shared__ uint32_t sharedMemory[1024*8];
-
-	aes_gpu_init256_32(sharedMemory);
-
-	const uint32_t P[48] = {
-		0xe7e9f5f5, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xa4213d7e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
-		0x01425eb8, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0x65978b09, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
-		0x2cb6b661, 0x6b23b3b3, 0xcf93a7cf, 0x9d9d3751, 0x9ac2dea3, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
-		0x579f9f33, 0xfbfbfbfb, 0xfbfbfbfb, 0xefefd3c7, 0xdbfde1dd, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
-		0x34514d9e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xb134347e, 0xea6f7e7e, 0xbd7731bd, 0x8a8a1968,
-		0x14b8a457, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0x265f4382, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af
-	};
-	uint32_t k0;
-	uint32_t h[16];
-
-	//	if (thread < threads){
-
-	uint32_t *Hash = &g_hash[thread << 4];
-
-	uint32_t A[32];
-
-	*(uint2x4*)&A[0] = *(uint2x4*)&c_IV_512[0] ^ __ldg4((uint2x4*)&Hash[0]);
-	*(uint2x4*)&A[8] = *(uint2x4*)&c_IV_512[8] ^ __ldg4((uint2x4*)&Hash[8]);
-	*(uint2x4*)&A[16] = *(uint2x4*)&c_IV_512[16];
-	*(uint2x4*)&A[24] = *(uint2x4*)&c_IV_512[24];
-
-	__syncthreads();
-
-	SIMD_Compress(A, thr_offset, g_fft4);
-
-#pragma unroll 16
-	for (int i = 0; i<16; i++){
-		h[i] = A[i];
-	}
-
-	k0 = 512 + 8;
-
-#pragma unroll 4
-	for (uint32_t idx = 0; idx < 16; idx += 4)
-		AES_2ROUND_32(sharedMemory, h[idx + 0], h[idx + 1], h[idx + 2], h[idx + 3], k0);
-
-	k0 += 4;
-
-	uint32_t W[64];
-
-	//		#pragma unroll 4
-	for (int i = 0; i < 4; i++){
-		uint32_t a = P[i];
-		uint32_t b = P[i + 4];
-		uint32_t c = h[i + 8];
-		uint32_t d = P[i + 8];
-
-		uint32_t ab = a ^ b;
-		uint32_t bc = b ^ c;
-		uint32_t cd = c ^ d;
-
-
-		uint32_t t = ((a ^ b) & 0x80808080);
-		uint32_t t2 = ((b ^ c) & 0x80808080);
-		uint32_t t3 = ((c ^ d) & 0x80808080);
-
-		uint32_t abx = ((t >> 7) * 27U) ^ ((ab^t) << 1);
-		uint32_t bcx = ((t2 >> 7) * 27U) ^ ((bc^t2) << 1);
-		uint32_t cdx = ((t3 >> 7) * 27U) ^ ((cd^t3) << 1);
-
-		W[0U + i] = bc ^ d ^ abx;
-		W[4U + i] = a ^ cd ^ bcx;
-		W[8U + i] = ab ^ d ^ cdx;
-		W[12U + i] = abx ^ bcx ^ cdx ^ ab ^ c;
-
-		a = P[12U + i];
-		b = h[i + 4U];
-		c = P[12U + i + 4U];
-		d = P[12U + i + 8U];
-
-		ab = a ^ b;
-		bc = b ^ c;
-		cd = c ^ d;
-
-
-		t = (ab & 0x80808080);
-		t2 = (bc & 0x80808080);
-		t3 = (cd & 0x80808080);
-
-		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
-		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
-		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
-
-		W[16U + i] = abx ^ bc ^ d;
-		W[16U + i + 4U] = bcx ^ a ^ cd;
-		W[16U + i + 8U] = cdx ^ ab ^ d;
-		W[16U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
-
-		a = h[i];
-		b = P[24U + i + 0U];
-		c = P[24U + i + 4U];
-		d = P[24U + i + 8U];
-
-		ab = a ^ b;
-		bc = b ^ c;
-		cd = c ^ d;
-
-
-		t = (ab & 0x80808080);
-		t2 = (bc & 0x80808080);
-		t3 = (cd & 0x80808080);
-
-		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
-		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
-		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
-
-		W[32U + i] = abx ^ bc ^ d;
-		W[32U + i + 4U] = bcx ^ a ^ cd;
-		W[32U + i + 8U] = cdx ^ ab ^ d;
-		W[32U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
-
-		a = P[36U + i];
-		b = P[36U + i + 4U];
-		c = P[36U + i + 8U];
-		d = h[i + 12U];
-
-		ab = a ^ b;
-		bc = b ^ c;
-		cd = c ^ d;
-
-		t = (ab & 0x80808080);
-		t2 = (bc & 0x80808080);
-		t3 = (cd & 0x80808080);
-
-		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
-		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
-		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
-
-		W[48U + i] = abx ^ bc ^ d;
-		W[48U + i + 4U] = bcx ^ a ^ cd;
-		W[48U + i + 8U] = cdx ^ ab ^ d;
-		W[48U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
-	}
-
-	for (int k = 1; k < 10; k++){
-		echo_round_sp(sharedMemory, W, k0);
-	}
-#pragma unroll 4
-	for (uint32_t i = 0; i < 16; i += 4)
-	{
-		W[i] ^= W[32 + i] ^ 512;
-		W[i + 1] ^= W[32 + i + 1];
-		W[i + 2] ^= W[32 + i + 2];
-		W[i + 3] ^= W[32 + i + 3];
-	}
-	*(uint2x4*)&Hash[0] = *(uint2x4*)&A[0] ^ *(uint2x4*)&W[0];
-	*(uint2x4*)&Hash[8] = *(uint2x4*)&A[8] ^ *(uint2x4*)&W[8];
-	//	}
-}
 
 __global__ //__launch_bounds__(128, 5)
 static void x16_simd512_gpu_compress_64_fugue512(uint32_t *g_hash, const uint4 *const __restrict__ g_fft4)
@@ -1247,6 +1080,170 @@ static void x16_simd512_gpu_compress_64_hamsi512(uint32_t *g_hash, const uint4 *
 	*(uint2x4*)&Hash[0] = *(uint2x4*)&h[0];
 	*(uint2x4*)&Hash[8] = *(uint2x4*)&h[8];
 }
+__global__
+__launch_bounds__(256, 3)
+static void x16_simd512_gpu_compress_64_echo512(uint32_t *g_hash, const uint4 *const __restrict__ g_fft4)
+{
+	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	const uint32_t thr_offset = thread << 6; // thr_id * 128 (je zwei elemente)
+
+	__shared__ uint32_t sharedMemory[8 * 1024];
+
+	aes_gpu_init256_32(sharedMemory);
+
+	const uint32_t P[48] = {
+		0xe7e9f5f5, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xa4213d7e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x01425eb8, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0x65978b09, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x2cb6b661, 0x6b23b3b3, 0xcf93a7cf, 0x9d9d3751, 0x9ac2dea3, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x579f9f33, 0xfbfbfbfb, 0xfbfbfbfb, 0xefefd3c7, 0xdbfde1dd, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x34514d9e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xb134347e, 0xea6f7e7e, 0xbd7731bd, 0x8a8a1968,
+		0x14b8a457, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0x265f4382, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af
+	};
+	uint32_t k0;
+	uint32_t h[16];
+
+	//	if (thread < threads){
+
+	uint32_t *Hash = &g_hash[thread << 4];
+
+	uint32_t A[32];
+
+	*(uint2x4*)&A[0] = *(uint2x4*)&c_IV_512[0] ^ __ldg4((uint2x4*)&Hash[0]);
+	*(uint2x4*)&A[8] = *(uint2x4*)&c_IV_512[8] ^ __ldg4((uint2x4*)&Hash[8]);
+	*(uint2x4*)&A[16] = *(uint2x4*)&c_IV_512[16];
+	*(uint2x4*)&A[24] = *(uint2x4*)&c_IV_512[24];
+
+	__syncthreads();
+
+	SIMD_Compress(A, thr_offset, g_fft4);
+
+	*(uint2x4*)&Hash[0] = *(uint2x4*)&A[0];
+	*(uint2x4*)&Hash[8] = *(uint2x4*)&A[8];
+
+#pragma unroll 16
+	for (int i = 0; i<16; i++){
+		h[i] = A[i];
+	}
+
+	k0 = 512 + 8;
+
+#pragma unroll 4
+	for (uint32_t idx = 0; idx < 16; idx += 4)
+		AES_2ROUND_32(sharedMemory, h[idx + 0], h[idx + 1], h[idx + 2], h[idx + 3], k0);
+
+	k0 += 4;
+
+	uint32_t W[64];
+
+	//		#pragma unroll 4
+	for (int i = 0; i < 4; i++){
+		uint32_t a = P[i];
+		uint32_t b = P[i + 4];
+		uint32_t c = h[i + 8];
+		uint32_t d = P[i + 8];
+
+		uint32_t ab = a ^ b;
+		uint32_t bc = b ^ c;
+		uint32_t cd = c ^ d;
+
+
+		uint32_t t = ((a ^ b) & 0x80808080);
+		uint32_t t2 = ((b ^ c) & 0x80808080);
+		uint32_t t3 = ((c ^ d) & 0x80808080);
+
+		uint32_t abx = ((t >> 7) * 27U) ^ ((ab^t) << 1);
+		uint32_t bcx = ((t2 >> 7) * 27U) ^ ((bc^t2) << 1);
+		uint32_t cdx = ((t3 >> 7) * 27U) ^ ((cd^t3) << 1);
+
+		W[0U + i] = bc ^ d ^ abx;
+		W[4U + i] = a ^ cd ^ bcx;
+		W[8U + i] = ab ^ d ^ cdx;
+		W[12U + i] = abx ^ bcx ^ cdx ^ ab ^ c;
+
+		a = P[12U + i];
+		b = h[i + 4U];
+		c = P[12U + i + 4U];
+		d = P[12U + i + 8U];
+
+		ab = a ^ b;
+		bc = b ^ c;
+		cd = c ^ d;
+
+
+		t = (ab & 0x80808080);
+		t2 = (bc & 0x80808080);
+		t3 = (cd & 0x80808080);
+
+		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
+		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
+
+		W[16U + i] = abx ^ bc ^ d;
+		W[16U + i + 4U] = bcx ^ a ^ cd;
+		W[16U + i + 8U] = cdx ^ ab ^ d;
+		W[16U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
+
+		a = h[i];
+		b = P[24U + i + 0U];
+		c = P[24U + i + 4U];
+		d = P[24U + i + 8U];
+
+		ab = a ^ b;
+		bc = b ^ c;
+		cd = c ^ d;
+
+
+		t = (ab & 0x80808080);
+		t2 = (bc & 0x80808080);
+		t3 = (cd & 0x80808080);
+
+		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
+		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
+
+		W[32U + i] = abx ^ bc ^ d;
+		W[32U + i + 4U] = bcx ^ a ^ cd;
+		W[32U + i + 8U] = cdx ^ ab ^ d;
+		W[32U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
+
+		a = P[36U + i];
+		b = P[36U + i + 4U];
+		c = P[36U + i + 8U];
+		d = h[i + 12U];
+
+		ab = a ^ b;
+		bc = b ^ c;
+		cd = c ^ d;
+
+		t = (ab & 0x80808080);
+		t2 = (bc & 0x80808080);
+		t3 = (cd & 0x80808080);
+
+		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
+		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
+
+		W[48U + i] = abx ^ bc ^ d;
+		W[48U + i + 4U] = bcx ^ a ^ cd;
+		W[48U + i + 8U] = cdx ^ ab ^ d;
+		W[48U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
+	}
+
+	for (int k = 1; k < 10; k++){
+		echo_round_sp(sharedMemory, W, k0);
+	}
+#pragma unroll 4
+	for (uint32_t i = 0; i < 16; i += 4)
+	{
+		W[i] ^= W[32 + i] ^ 512;
+		W[i + 1] ^= W[32 + i + 1];
+		W[i + 2] ^= W[32 + i + 2];
+		W[i + 3] ^= W[32 + i + 3];
+	}
+	*(uint2x4*)&Hash[0] = *(uint2x4*)&Hash[0] ^ *(uint2x4*)&W[0];
+	*(uint2x4*)&Hash[8] = *(uint2x4*)&Hash[8] ^ *(uint2x4*)&W[8];
+}
+
 
 __global__ //__launch_bounds__(128, 5)
 static void x16_simd512_gpu_compress_64_whirlpool512(uint32_t *g_hash, const uint4 *const __restrict__ g_fft4)
@@ -1394,8 +1391,6 @@ static void x16_simd512_gpu_compress_64_whirlpool512(uint32_t *g_hash, const uin
 	*(uint2x4*)&Hash[0] = *(uint2x4*)&hash[0];
 	*(uint2x4*)&Hash[8] = *(uint2x4*)&hash[4];
 }
-
-
 
 
 __host__
