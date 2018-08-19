@@ -2,7 +2,7 @@
 * echo512-80 cuda kernel for X16R algorithm
 *
 * tpruvot 2018 - GPL code
-* sp 2018 (50% faster)
+*  sp 2018 (65% faster)
 */
 
 #include <stdio.h>
@@ -17,11 +17,17 @@ extern __device__ __device_builtin__ void __threadfence_block(void);
 #define INTENSIVE_GMF
 #include "x11/cuda_x11_aes_sp.cuh"
 
-__device__ __forceinline__ void echo_round(const uint32_t sharedMemory[4][256], uint32_t *W, uint32_t &k0){
+__device__ __forceinline__ uint32_t xor3(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(a) : "r"(b), "r"(c));	// 0xEA = (F0 ^ CC) ^ AA
+	return a;
+}
+
+__device__ static __forceinline__ void echo_round_sp(const uint32_t sharedMemory[1024 * 8], uint32_t *W, uint32_t &k0){
 	// Big Sub Words
 #pragma unroll 16
 	for (int idx = 0; idx < 16; idx++)
-		AES_2ROUND(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
+		AES_2ROUND_32(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
 
 	// Shift Rows
 #pragma unroll 4
@@ -71,19 +77,19 @@ __device__ __forceinline__ void echo_round(const uint32_t sharedMemory[4][256], 
 			uint32_t bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
 			uint32_t cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
 
-			W[idx + i] = bc ^ a[3] ^ abx;
-			W[idx + i + 4] = a[0] ^ cd ^ bcx;
-			W[idx + i + 8] = ab ^ a[3] ^ cdx;
-			W[idx + i + 12] = ab ^ a[2] ^ (abx ^ bcx ^ cdx);
+			W[idx + i] = (bc^ a[3] ^ abx);
+			W[idx + i + 4] = xor3(a[0], cd, bcx);
+			W[idx + i + 8] = xor3(ab, a[3], cdx);
+			W[idx + i + 12] = xor3(ab, a[2], xor3(abx, bcx, cdx));
 		}
 	}
 }
-__device__ __forceinline__ void echo_round_first(const uint32_t sharedMemory[4][256], uint32_t *W, uint32_t &k0)
+__device__ static __forceinline__ void echo_round_first_sp(const uint32_t sharedMemory[1024 * 8], uint32_t *W, uint32_t &k0)
 {
 	// Big Sub Words
 #pragma unroll
 	for (int idx = 8; idx < 13; idx++)
-		AES_2ROUND(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
+		AES_2ROUND_32(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
 
 	k0 += 3;
 
@@ -135,31 +141,31 @@ __device__ __forceinline__ void echo_round_first(const uint32_t sharedMemory[4][
 			uint32_t bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
 			uint32_t cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
 
-			W[idx + i] = bc ^ a[3] ^ abx;
-			W[idx + i + 4] = a[0] ^ cd ^ bcx;
-			W[idx + i + 8] = ab ^ a[3] ^ cdx;
-			W[idx + i + 12] = ab ^ a[2] ^ (abx ^ bcx ^ cdx);
+			W[idx + i] = (bc^ a[3] ^ abx);
+			W[idx + i + 4] = xor3(a[0], cd, bcx);
+			W[idx + i + 8] = xor3(ab, a[3], cdx);
+			W[idx + i + 12] = xor3(ab, a[2], xor3(abx, bcx, cdx));
 		}
 	}
 }
 
-__constant__ const uint4 P[11] = { { 0xc2031f3a, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0x428a9633, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0xe2eaf6f3, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0xc9f3efc1, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0x56869a2b, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0x789c801f, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0x81cbd7b1, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0x4a7b67ca, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
-{ 0x83d3d3ab, 0xea6f7e7e, 0xbd7731bd, 0x8a8a1968 },
-{ 0x5d99993f, 0x6b23b3b3, 0xcf93a7cf, 0x9d9d3751 },
-{ 0x57706cdc, 0xe4736c70, 0xf53fa165, 0xd6be2d00 } };
-
-
 __device__ __forceinline__
-void cuda_echo_round_80(const uint32_t sharedMemory[4][256], uint32_t *const __restrict__ data, const uint32_t nonce, uint32_t *hash)
+void cuda_echo_round_80(const uint32_t sharedMemory[1024 * 8], uint32_t *const __restrict__ data, const uint32_t nonce, uint32_t *hash)
 {
 	uint32_t W[64];
+
+	const uint4 P[11] = { { 0xc2031f3a, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0x428a9633, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0xe2eaf6f3, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0xc9f3efc1, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0x56869a2b, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0x789c801f, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0x81cbd7b1, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0x4a7b67ca, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af },
+	{ 0x83d3d3ab, 0xea6f7e7e, 0xbd7731bd, 0x8a8a1968 },
+	{ 0x5d99993f, 0x6b23b3b3, 0xcf93a7cf, 0x9d9d3751 },
+	{ 0x57706cdc, 0xe4736c70, 0xf53fa165, 0xd6be2d00 } };
+
 
 	W[51] = cuda_swab32(nonce);
 	W[52] = 0x80;
@@ -183,31 +189,31 @@ void cuda_echo_round_80(const uint32_t sharedMemory[4][256], uint32_t *const __r
 	W4[15] = P[10];
 
 	k0 += 8;
-	echo_round_first(sharedMemory, W, k0);
+	echo_round_first_sp(sharedMemory, W, k0);
 
 	for (int i = 1; i < 10; i++)
-		echo_round(sharedMemory, W, k0);
+		echo_round_sp(sharedMemory, W, k0);
 
 	uint32_t Z[16];
 
 	Z[0] = 512 ^ data[0] ^ W[0] ^ W[0 + 32];
-	Z[1] = 0 ^ data[1] ^ W[1] ^ W[1 + 32];
-	Z[2] = 0 ^ data[2] ^ W[2] ^ W[2 + 32];
-	Z[3] = 0 ^ data[3] ^ W[3] ^ W[3 + 32];
+	Z[1] = data[1] ^ W[1] ^ W[1 + 32];
+	Z[2] = data[2] ^ W[2] ^ W[2 + 32];
+	Z[3] = data[3] ^ W[3] ^ W[3 + 32];
 	Z[4] = 512 ^ data[4] ^ W[4] ^ W[4 + 32];
-	Z[5] = 0 ^ data[5] ^ W[5] ^ W[5 + 32];
-	Z[6] = 0 ^ data[6] ^ W[6] ^ W[6 + 32];
-	Z[7] = 0 ^ data[7] ^ W[7] ^ W[7 + 32];
+	Z[5] = data[5] ^ W[5] ^ W[5 + 32];
+	Z[6] = data[6] ^ W[6] ^ W[6 + 32];
+	Z[7] = data[7] ^ W[7] ^ W[7 + 32];
 	*(uint2x4*)&hash[0] = *(uint2x4*)&Z[0];
 
 	Z[8] = 512 ^ data[8] ^ W[8] ^ W[8 + 32];
-	Z[9] = 0 ^ data[9] ^ W[9] ^ W[9 + 32];
-	Z[10] = 0 ^ data[10] ^ W[10] ^ W[10 + 32];
-	Z[11] = 0 ^ data[11] ^ W[11] ^ W[11 + 32];
+	Z[9] = data[9] ^ W[9] ^ W[9 + 32];
+	Z[10] = data[10] ^ W[10] ^ W[10 + 32];
+	Z[11] = data[11] ^ W[11] ^ W[11 + 32];
 	Z[12] = 512 ^ data[12] ^ W[12] ^ W[12 + 32];
-	Z[13] = 0 ^ data[13] ^ W[13] ^ W[13 + 32];
-	Z[14] = 0 ^ data[14] ^ W[14] ^ W[14 + 32];
-	Z[15] = 0 ^ data[15] ^ W[15] ^ W[15 + 32];
+	Z[13] = data[13] ^ W[13] ^ W[13 + 32];
+	Z[14] = data[14] ^ W[14] ^ W[14 + 32];
+	Z[15] = data[15] ^ W[15] ^ W[15 + 32];
 
 	*(uint2x4*)&hash[8] = *(uint2x4*)&Z[8];
 }
@@ -226,12 +232,13 @@ void x16_echo512_setBlock_80(void *endiandata)
 	cudaMemcpyToSymbol(c_PaddedMessage80, endiandata, sizeof(c_PaddedMessage80), 0, cudaMemcpyHostToDevice);
 }
 
-__global__ __launch_bounds__(128, 5) /* will force 72 registers */
-void x16_echo512_gpu_hash_80(uint32_t threads, uint32_t startNonce, uint64_t *g_hash)
+__global__ __launch_bounds__(256, 3) /* will force 72 registers */
+void x16_echo512_gpu_hash_80_sp(uint32_t threads, uint32_t startNonce, uint64_t *g_hash)
 {
-	__shared__ __align__(16) uint32_t sharedMemory[4][256];
+	__shared__  uint32_t sharedMemory[1024 * 8];
 
-	aes_gpu_init128(sharedMemory);
+	aes_gpu_init256_32(sharedMemory);
+	__threadfence_block();
 
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	if (thread < threads)
@@ -246,10 +253,10 @@ void x16_echo512_gpu_hash_80(uint32_t threads, uint32_t startNonce, uint64_t *g_
 __host__
 void x16_echo512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash)
 {
-	const uint32_t threadsperblock = 128;
+	const uint32_t threadsperblock = 256;
 
 	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
 	dim3 block(threadsperblock);
 
-	x16_echo512_gpu_hash_80 << <grid, block >> >(threads, startNonce, (uint64_t*)d_hash);
+	x16_echo512_gpu_hash_80_sp << <grid, block >> >(threads, startNonce, (uint64_t*)d_hash);
 }

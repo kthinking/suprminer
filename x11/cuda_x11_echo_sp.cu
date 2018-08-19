@@ -10,46 +10,46 @@
 #include "cuda_x11_aes_sp.cuh"
 
 __device__
-static void echo_round_sp(const uint32_t sharedMemory[8*1024], uint32_t *W, uint32_t &k0){
+static void echo_round_sp(const uint32_t sharedMemory[8 * 1024], uint32_t *W, uint32_t &k0){
 	// Big Sub Words
-	#pragma unroll 16
+#pragma unroll 16
 	for (int idx = 0; idx < 16; idx++)
-		AES_2ROUND_32(sharedMemory,W[(idx<<2) + 0], W[(idx<<2) + 1], W[(idx<<2) + 2], W[(idx<<2) + 3], k0);
+		AES_2ROUND_32(sharedMemory, W[(idx << 2) + 0], W[(idx << 2) + 1], W[(idx << 2) + 2], W[(idx << 2) + 3], k0);
 
 	// Shift Rows
-	#pragma unroll 4
+#pragma unroll 4
 	for (int i = 0; i < 4; i++){
 		uint32_t t[4];
 		/// 1, 5, 9, 13
-		t[0] = W[i+ 4];
-		t[1] = W[i+ 8];
-		t[2] = W[i+24];
-		t[3] = W[i+60];
+		t[0] = W[i + 4];
+		t[1] = W[i + 8];
+		t[2] = W[i + 24];
+		t[3] = W[i + 60];
 		W[i + 4] = W[i + 20];
 		W[i + 8] = W[i + 40];
-		W[i +24] = W[i + 56];
-		W[i +60] = W[i + 44];
+		W[i + 24] = W[i + 56];
+		W[i + 60] = W[i + 44];
 
-		W[i +20] = W[i +36];
-		W[i +40] = t[1];
-		W[i +56] = t[2];
-		W[i +44] = W[i +28];
+		W[i + 20] = W[i + 36];
+		W[i + 40] = t[1];
+		W[i + 56] = t[2];
+		W[i + 44] = W[i + 28];
 
-		W[i +28] = W[i +12];
-		W[i +12] = t[3];
-		W[i +36] = W[i +52];
-		W[i +52] = t[0];
+		W[i + 28] = W[i + 12];
+		W[i + 12] = t[3];
+		W[i + 36] = W[i + 52];
+		W[i + 52] = t[0];
 	}
 	// Mix Columns
-	#pragma unroll 4
+#pragma unroll 4
 	for (int i = 0; i < 4; i++){ // Schleife über je 2*uint32_t
-		#pragma unroll 4
+#pragma unroll 4
 		for (int idx = 0; idx < 64; idx += 16){ // Schleife über die elemnte
 			uint32_t a[4];
 			a[0] = W[idx + i];
 			a[1] = W[idx + i + 4];
 			a[2] = W[idx + i + 8];
-			a[3] = W[idx + i +12];
+			a[3] = W[idx + i + 12];
 
 			uint32_t ab = a[0] ^ a[1];
 			uint32_t bc = a[1] ^ a[2];
@@ -60,14 +60,14 @@ static void echo_round_sp(const uint32_t sharedMemory[8*1024], uint32_t *W, uint
 			t2 = (bc & 0x80808080);
 			t3 = (cd & 0x80808080);
 
-			uint32_t abx = (t  >> 7) * 27U ^ ((ab^t) << 1);
+			uint32_t abx = (t >> 7) * 27U ^ ((ab^t) << 1);
 			uint32_t bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
 			uint32_t cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
 
-			W[idx + i] = bc ^ a[3] ^ abx;
-			W[idx + i + 4] = a[0] ^ cd ^ bcx;
-			W[idx + i + 8] = ab ^ a[3] ^ cdx;
-			W[idx + i +12] = ab ^ a[2] ^ (abx ^ bcx ^ cdx);
+			W[idx + i] = (bc^ a[3] ^ abx);
+			W[idx + i + 4] = xor3(a[0], cd, bcx);
+			W[idx + i + 8] = xor3(ab, a[3], cdx);
+			W[idx + i + 12] = xor3(ab, a[2], xor3(abx, bcx, cdx));
 		}
 	}
 }
@@ -75,9 +75,10 @@ static void echo_round_sp(const uint32_t sharedMemory[8*1024], uint32_t *W, uint
 __global__ __launch_bounds__(256, 3) /* will force 80 registers */
 void x11_echo512_gpu_hash_64_final_sp(uint32_t threads, uint64_t *g_hash, uint32_t* resNonce, const uint64_t target)
 {
-	__shared__ uint32_t sharedMemory[1024*8];
+	__shared__ __align__(16) uint32_t sharedMemory[8 * 1024];
 
 	aes_gpu_init256_32(sharedMemory);
+
 
 	const uint32_t P[48] = {
 		0xe7e9f5f5, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xa4213d7e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
@@ -106,6 +107,8 @@ void x11_echo512_gpu_hash_64_final_sp(uint32_t threads, uint64_t *g_hash, uint32
 		uint64_t backup = *(uint64_t*)&h[6];
 
 		k0 = 512 + 8;
+
+		__threadfence_block();
 
 #pragma unroll 4
 		for (uint32_t idx = 0; idx < 16; idx += 4)
@@ -204,63 +207,28 @@ void x11_echo512_gpu_hash_64_final_sp(uint32_t threads, uint64_t *g_hash, uint32
 			cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
 
 			W[48 + i] = abx ^ bc ^ d;
-			W[48 + i + 4] = bcx ^ a ^ cd;
-			W[48 + i + 8] = cdx ^ ab ^ d;
-			W[48 + i + 12] = abx ^ bcx ^ cdx ^ ab ^ c;
+			W[48 + i + 4] = xor3(bcx , a , cd);
+			W[48 + i + 8] = xor3(cdx , ab, d);
+			W[48 + i + 12] = xor3(abx , bcx , xor3(cdx, ab, c));
+
+
 		}
 
-		for (int k = 1; k < 9; k++)
+		for (int k = 1; k < 10; k++)
 			echo_round_sp(sharedMemory, W, k0);
-		// Big Sub Words
-		uint32_t y0, y1, y2, y3;
-		//		AES_2ROUND(sharedMemory,W[ 0], W[ 1], W[ 2], W[ 3], k0);
-		aes_round_32(sharedMemory, W[0], W[1], W[2], W[3], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[0], W[1], W[2], W[3]);
-		//		AES_2ROUND(sharedMemory,W[ 4], W[ 5], W[ 6], W[ 7], k0);
-		aes_round_32(sharedMemory, W[4], W[5], W[6], W[7], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[4], W[5], W[6], W[7]);
-		//		AES_2ROUND(sharedMemory,W[ 8], W[ 9], W[10], W[11], k0);
-		aes_round_32(sharedMemory, W[8], W[9], W[10], W[11], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[8], W[9], W[10], W[11]);
 
-		//		AES_2ROUND(sharedMemory,W[20], W[21], W[22], W[23], k0);
-		aes_round_32(sharedMemory, W[20], W[21], W[22], W[23], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[20], W[21], W[22], W[23]);
-		//		AES_2ROUND(sharedMemory,W[28], W[29], W[30], W[31], k0);
-		aes_round_32(sharedMemory, W[28], W[29], W[30], W[31], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[28], W[29], W[30], W[31]);
+#pragma unroll 4
+		for (int i = 0; i < 16; i += 4)
+		{
+			W[i] ^= W[32 + i] ^ 512;
+			W[i + 1] ^= W[32 + i + 1];
+			W[i + 2] ^= W[32 + i + 2];
+			W[i + 3] ^= W[32 + i + 3];
+		}
+		uint64_t check = ((uint64_t*)hash)[3] ^ ((uint64_t*)W)[3];
 
-		//		AES_2ROUND(sharedMemory,W[32], W[33], W[34], W[35], k0);
-		aes_round_32(sharedMemory, W[32], W[33], W[34], W[35], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[32], W[33], W[34], W[35]);
-		//		AES_2ROUND(sharedMemory,W[40], W[41], W[42], W[43], k0);
-		aes_round_32(sharedMemory, W[40], W[41], W[42], W[43], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[40], W[41], W[42], W[43]);
-
-		aes_round_32(sharedMemory, W[52], W[53], W[54], W[55], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[52], W[53], W[54], W[55]);
-		//		AES_2ROUND(sharedMemory,W[60], W[61], W[62], W[63], k0);
-		aes_round_32(sharedMemory, W[60], W[61], W[62], W[63], k0, y0, y1, y2, y3);
-		aes_round_32(sharedMemory, y0, y1, y2, y3, W[60], W[61], W[62], W[63]);
-
-		uint32_t bc = W[22] ^ W[42];
-		uint32_t t2 = (bc & 0x80808080);
-		W[6] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
-
-		bc = W[23] ^ W[43];
-		t2 = (bc & 0x80808080);
-		W[7] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
-
-		bc = W[10] ^ W[54];
-		t2 = (bc & 0x80808080);
-		W[38] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
-
-		bc = W[11] ^ W[55];
-		t2 = (bc & 0x80808080);
-		W[39] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
-
-		uint64_t check = backup ^ *(uint64_t*)&W[2] ^ *(uint64_t*)&W[6] ^ *(uint64_t*)&W[10] ^ *(uint64_t*)&W[30] ^ *(uint64_t*)&W[34] ^ *(uint64_t*)&W[38] ^ *(uint64_t*)&W[42] ^ *(uint64_t*)&W[62];
-		if (check <= target){
+		if (check <= target)
+		{
 			uint32_t tmp = atomicExch(&resNonce[0], thread);
 			if (tmp != UINT32_MAX)
 				resNonce[1] = tmp;
@@ -282,25 +250,26 @@ void x11_echo512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_
 __global__ __launch_bounds__(384, 2)
 static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 {
-	__shared__ uint32_t sharedMemory[8*1024];
+	__shared__ uint32_t sharedMemory[8 * 1024];
 
+	//	if (threadIdx.x < 256)
+	//	{
 	aes_gpu_init256_32(sharedMemory);
-
+	//	}
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	uint32_t k0;
 	uint32_t h[16];
 	uint32_t hash[16];
 	if (thread < threads){
 
-		uint32_t *Hash = &g_hash[thread<<4];
+		uint32_t *Hash = &g_hash[thread << 4];
 
-		*(uint2x4*)&h[ 0] = __ldg4((uint2x4*)&Hash[ 0]);
-		*(uint2x4*)&h[ 8] = __ldg4((uint2x4*)&Hash[ 8]);
+		*(uint2x4*)&h[0] = __ldg4((uint2x4*)&Hash[0]);
+		*(uint2x4*)&h[8] = __ldg4((uint2x4*)&Hash[8]);
 
-		*(uint2x4*)&hash[ 0] = *(uint2x4*)&h[ 0];
-		*(uint2x4*)&hash[ 8] = *(uint2x4*)&h[ 8];
+		//		*(uint2x4*)&hash[0] = *(uint2x4*)&h[0];
+		//		*(uint2x4*)&hash[8] = *(uint2x4*)&h[8];
 
-		__syncthreads();
 
 		const uint32_t P[48] = {
 			0xe7e9f5f5, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xa4213d7e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
@@ -316,8 +285,9 @@ static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 		};
 
 		k0 = 520;
+		__threadfence_block();
 
-		#pragma unroll 4
+#pragma unroll 4
 		for (uint32_t idx = 0; idx < 16; idx += 4)
 		{
 			AES_2ROUND_32(sharedMemory, h[idx + 0], h[idx + 1], h[idx + 2], h[idx + 3], k0);
@@ -326,7 +296,7 @@ static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 
 		uint32_t W[64];
 
-		#pragma unroll 4
+#pragma unroll 4
 		for (uint32_t i = 0; i < 4; i++)
 		{
 			uint32_t a = P[i];
@@ -339,23 +309,23 @@ static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 			uint32_t cd = c ^ d;
 
 
-			uint32_t t =  (ab & 0x80808080);
+			uint32_t t = (ab & 0x80808080);
 			uint32_t t2 = (bc & 0x80808080);
 			uint32_t t3 = (cd & 0x80808080);
 
-			uint32_t abx = (t  >> 7) * 27U ^ ((ab^t) << 1);
+			uint32_t abx = (t >> 7) * 27U ^ ((ab^t) << 1);
 			uint32_t bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
 			uint32_t cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
 
 			W[i] = abx ^ bc ^ d;
 			W[i + 4] = bcx ^ a ^ cd;
 			W[i + 8] = cdx ^ ab ^ d;
-			W[i +12] = abx ^ bcx ^ cdx ^ ab ^ c;
+			W[i + 12] = abx ^ bcx ^ cdx ^ ab ^ c;
 
-			a = P[i +12];
+			a = P[i + 12];
 			b = h[i + 4];
-			c = P[i +16];
-			d = P[i +20];
+			c = P[i + 16];
+			d = P[i + 20];
 
 			ab = a ^ b;
 			bc = b ^ c;
@@ -398,7 +368,7 @@ static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 			W[32 + i + 8] = d ^ ab ^ cdx;
 			W[32 + i + 12] = c ^ ab ^ abx ^ bcx ^ cdx;
 
-			a = P[36 + i ];
+			a = P[36 + i];
 			b = P[36 + i + 4];
 			c = P[36 + i + 8];
 			d = h[i + 12];
@@ -415,17 +385,17 @@ static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 			bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
 			cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
 
-			W[48 + i] = bc ^ d ^ abx;
-			W[48 + i + 4] = a ^ cd ^ bcx;
-			W[48 + i + 8] = d ^ ab ^ cdx;
-			W[48 + i + 12] = c ^ ab ^ abx ^ bcx ^ cdx;
+			W[48 + i] = (bc ^ d ^ abx);
+			W[48 + i + 4] = (a ^ cd ^ bcx);
+			W[48 + i + 8] = (d^ ab^ cdx);
+			W[48 + i + 12] = (c ^ ab ^ (abx ^ bcx ^cdx));
 
 		}
 
 		for (int k = 1; k < 10; k++)
-			echo_round_sp(sharedMemory,W,k0);
+			echo_round_sp(sharedMemory, W, k0);
 
-		#pragma unroll 4
+#pragma unroll 4
 		for (int i = 0; i < 16; i += 4)
 		{
 			W[i] ^= W[32 + i] ^ 512;
@@ -433,8 +403,8 @@ static void x11_echo512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 			W[i + 2] ^= W[32 + i + 2];
 			W[i + 3] ^= W[32 + i + 3];
 		}
-		*(uint2x4*)&Hash[ 0] = *(uint2x4*)&hash[ 0] ^ *(uint2x4*)&W[ 0];
-		*(uint2x4*)&Hash[ 8] = *(uint2x4*)&hash[ 8] ^ *(uint2x4*)&W[ 8];
+		*(uint2x4*)&Hash[0] = *(uint2x4*)&Hash[0] ^ *(uint2x4*)&W[0];
+		*(uint2x4*)&Hash[8] = *(uint2x4*)&Hash[8] ^ *(uint2x4*)&W[8];
 	}
 }
 

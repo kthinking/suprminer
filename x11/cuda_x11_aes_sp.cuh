@@ -1,11 +1,9 @@
 /*
 Based upon the 2 Christians,klaus_t's, Tanguy Pruvot's and SP's work (2013-2016)
 Provos Alexis - 2016
-optimized by sp - 2018 (+40% faster on the gtx 1080ti)
+optimized by sp - 2018 (+50% faster on the gtx 1080ti)
 */
-
 #include "miner.h"
-#include "cuda_vectors_alexis.h"
 
 __device__  static uint32_t __align__(16) d_AES0[256] = {
 	0xA56363C6, 0x847C7CF8, 0x997777EE, 0x8D7B7BF6, 0x0DF2F2FF, 0xBD6B6BD6, 0xB16F6FDE, 0x54C5C591, 0x50303060, 0x03010102, 0xA96767CE, 0x7D2B2B56, 0x19FEFEE7, 0x62D7D7B5, 0xE6ABAB4D, 0x9A7676EC,
@@ -68,45 +66,6 @@ void aes_gpu_init256(uint32_t sharedMemory[4][256])
 	sharedMemory[2][threadIdx.x] = ROL16(temp);
 	sharedMemory[3][threadIdx.x] = ROR8(temp);
 }
-__device__ __forceinline__
-void aes_gpu_init256_32(uint32_t sharedMemory[1024*8])
-{
-	/* each thread startup will fill a uint32 */
-	const uint32_t thread = threadIdx.x << 5;
-	uint32_t temp = __ldg(&d_AES0[threadIdx.x]);
-	sharedMemory[thread] = temp;
-	sharedMemory[1 + thread] = temp;
-	sharedMemory[2 + thread] = temp;
-	sharedMemory[3 + thread] = temp;
-	sharedMemory[4 + thread] = temp;
-	sharedMemory[5 + thread] = temp;
-	sharedMemory[6 + thread] = temp;
-	sharedMemory[7 + thread] = temp;
-	sharedMemory[8 + thread] = temp;
-	sharedMemory[9 + thread] = temp;
-	sharedMemory[10 + thread] = temp;
-	sharedMemory[11 + thread] = temp;
-	sharedMemory[12 + thread] = temp;
-	sharedMemory[13 + thread] = temp;
-	sharedMemory[14 + thread] = temp;
-	sharedMemory[15 + thread] = temp;
-	sharedMemory[16 + thread] = temp;
-	sharedMemory[17 + thread] = temp;
-	sharedMemory[18 + thread] = temp;
-	sharedMemory[19 + thread] = temp;
-	sharedMemory[20 + thread] = temp;
-	sharedMemory[21 + thread] = temp;
-	sharedMemory[22 + thread] = temp;
-	sharedMemory[23 + thread] = temp;
-	sharedMemory[24 + thread] = temp;
-	sharedMemory[25 + thread] = temp;
-	sharedMemory[26 + thread] = temp;
-	sharedMemory[27 + thread] = temp;
-	sharedMemory[28 + thread] = temp;
-	sharedMemory[29 + thread] = temp;
-	sharedMemory[30 + thread] = temp;
-	sharedMemory[31 + thread] = temp;
-}
 
 __device__ __forceinline__
 void aes_gpu_init128(uint32_t sharedMemory[4][256])
@@ -123,6 +82,7 @@ void aes_gpu_init128(uint32_t sharedMemory[4][256])
 	sharedMemory[3][(threadIdx.x << 1) + 0] = ROR8(temp.x);
 	sharedMemory[3][(threadIdx.x << 1) + 1] = ROR8(temp.y);
 }
+
 
 __device__ __forceinline__
 void aes_gpu_init64(uint32_t sharedMemory[4][256])
@@ -254,32 +214,6 @@ static void aes_round(const uint32_t sharedMemory[4][256], const uint32_t x0, co
 }
 
 __device__ __forceinline__
-static void aes_round_32(const uint32_t sharedMemory[1024*8], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, const uint32_t k0, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3)
-{
-	y0 = sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4440) << 5)];
-	y0 ^= ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4441) << 5))]);
-	y0 ^= k0;
-	y0 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4442) << 5))]);
-	y0 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4443) << 5))]);
-
-	y3 = ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4441) << 5))]);
-	y3 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4442) << 5))]);
-	y3 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4443) << 5))]);
-	y3 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4440) << 5)];
-
-	y2 = ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4442) << 5)]);
-	y2 ^= ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4443) << 5)]);
-	y2 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4440) << 5)];
-	y2 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4441) << 5)]);
-
-	y1 = ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4443) << 5)]);
-	y1 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4440) << 5)];
-	y1 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4441) << 5)]);
-	y1 ^= ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4442) << 5)]);
-}
-
-
-__device__ __forceinline__
 static void aes_round_LDG(const uint32_t sharedMemory[4][256], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, const uint32_t k0, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3){
 
 	y0 = __ldg(&d_AES0[x0 & 0xff]);
@@ -302,31 +236,6 @@ static void aes_round_LDG(const uint32_t sharedMemory[4][256], const uint32_t x0
 	y1 ^= sharedMemory[0][x1 & 0xff];
 	y1 ^= sharedMemory[1][__byte_perm(x2, 0, 0x4441)];
 	y1 ^= sharedMemory[2][__byte_perm(x3, 0, 0x4442)];
-}
-
-
-__device__ __forceinline__
-static void aes_round_32(const uint32_t sharedMemory[1024*8], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3)
-{
-	y0 = sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4440) << 5)];
-	y0 ^= ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4441) << 5))]);
-	y0 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4442) << 5))]);
-	y0 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4443) << 5))]);
-
-	y3 = ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4441) << 5))]);
-	y3 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4442) << 5))]);
-	y3 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4443) << 5))]);
-	y3 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4440) << 5)];
-
-	y2 = ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4442) << 5)]);
-	y2 ^= ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4443) << 5)]);
-	y2 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4440) << 5)];
-	y2 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4441) << 5)]);
-
-	y1 = ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4443) << 5)]);
-	y1 ^= sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4440) << 5)];
-	y1 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4441) << 5)]);
-	y1 ^= ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4442) << 5)]);
 }
 
 
@@ -395,19 +304,6 @@ __device__ __forceinline__  void AES_2ROUND(const uint32_t sharedMemory[4][256],
 	k0++;
 }
 
-__device__ __forceinline__  void AES_2ROUND_32(const uint32_t sharedMemory[1024*8], uint32_t &x0, uint32_t &x1, uint32_t &x2, uint32_t &x3, uint32_t &k0)
-{
-	uint32_t y0, y1, y2, y3;
-
-	aes_round_32(sharedMemory, x0, x1, x2, x3, k0, y0, y1, y2, y3);
-
-	aes_round_32(sharedMemory, y0, y1, y2, y3, x0, x1, x2, x3);
-
-	// hier werden wir ein carry brauchen (oder auch nicht)
-	k0++;
-}
-
-
 __device__ __forceinline__  void AES_2ROUND_LDG(const uint32_t sharedMemory[4][256], uint32_t &x0, uint32_t &x1, uint32_t &x2, uint32_t &x3, uint32_t &k0)
 {
 	uint32_t y0, y1, y2, y3;
@@ -444,20 +340,6 @@ static void AES_ROUND_NOKEY(const uint32_t sharedMemory[4][256], uint4* x){
 	x->w = y3;
 }
 
-
-__device__ __forceinline__
-static void AES_ROUND_NOKEY_32(const uint32_t sharedMemory[1024*8], uint4* x){
-
-	uint32_t y0, y1, y2, y3;
-	aes_round_32(sharedMemory, x->x, x->y, x->z, x->w, y0, y1, y2, y3);
-
-	x->x = y0;
-	x->y = y1;
-	x->z = y2;
-	x->w = y3;
-}
-
-
 __device__ __forceinline__
 static void KEY_EXPAND_ELT(const uint32_t sharedMemory[4][256], uint32_t *k)
 {
@@ -472,7 +354,107 @@ static void KEY_EXPAND_ELT(const uint32_t sharedMemory[4][256], uint32_t *k)
 }
 
 __device__ __forceinline__
-static void KEY_EXPAND_ELT_32(const uint32_t sharedMemory[1024*8], uint32_t *k)
+static void aes_round_32(const uint32_t sharedMemory[1024 * 8], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, const uint32_t k0, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3)
+{
+	y0 = sharedMemory[(threadIdx.x & 31) + ((x0 & 0xff) << 5)];
+	y3 = ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4441) << 5))]);
+	y2 = ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4442) << 5)]);
+	y1 = ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4443) << 5)]);
+
+	y0 ^= ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4441) << 5))]);
+	y3 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4442) << 5))]);
+	y2 ^= ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4443) << 5)]);
+	y1 ^= sharedMemory[(threadIdx.x & 31) + ((x1 & 0xff) << 5)];
+
+	y0 ^= k0;
+	y0 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4442) << 5))]);
+	y3 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4443) << 5))]);
+	y2 ^= sharedMemory[(threadIdx.x & 31) + ((x2 & 0xff) << 5)];
+	y1 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4441) << 5)]);
+
+	y0 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4443) << 5))]);
+	y3 ^= sharedMemory[(threadIdx.x & 31) + ((x3 & 0xff) << 5)];
+	y2 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4441) << 5)]);
+	y1 ^= ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4442) << 5)]);
+}
+
+__device__ __forceinline__
+static void aes_round_32(const uint32_t sharedMemory[1024 * 8], const uint32_t x0, const uint32_t x1, const uint32_t x2, const uint32_t x3, uint32_t &y0, uint32_t &y1, uint32_t &y2, uint32_t &y3)
+{
+	y0 = sharedMemory[(threadIdx.x & 31) + ((x0 & 0xff) << 5)];
+	y0 ^= ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4441) << 5))]);
+	y0 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4442) << 5))]);
+	y0 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4443) << 5))]);
+
+	y3 = ROL8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4441) << 5))]);
+	y3 ^= ROL16(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4442) << 5))]);
+	y3 ^= ROR8(sharedMemory[(threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4443) << 5))]);
+	y3 ^= sharedMemory[(threadIdx.x & 31) + ((x3 & 0xff) << 5)];
+
+	y2 = ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4442) << 5)]);
+	y2 ^= ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x1, 0, 0x4443) << 5)]);
+	y2 ^= sharedMemory[(threadIdx.x & 31) + ((x2 & 0xff) << 5)];
+	y2 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4441) << 5)]);
+
+	y1 = ROR8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x0, 0, 0x4443) << 5)]);
+	y1 ^= sharedMemory[(threadIdx.x & 31) + ((x1 & 0xff) << 5)];
+	y1 ^= ROL8(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x2, 0, 0x4441) << 5)]);
+	y1 ^= ROL16(sharedMemory[(threadIdx.x & 31) + (__byte_perm(x3, 0, 0x4442) << 5)]);
+}
+
+__device__ __forceinline__  void AES_2ROUND_32(const uint32_t sharedMemory[1024 * 8], uint32_t &x0, uint32_t &x1, uint32_t &x2, uint32_t &x3, uint32_t &k0)
+{
+	uint32_t y0, y1, y2, y3;
+
+	aes_round_32(sharedMemory, x0, x1, x2, x3, k0, y0, y1, y2, y3);
+
+	aes_round_32(sharedMemory, y0, y1, y2, y3, x0, x1, x2, x3);
+
+	// hier werden wir ein carry brauchen (oder auch nicht)
+	k0++;
+}
+__device__ __forceinline__
+static void AES_ROUND_NOKEY_32(const uint32_t sharedMemory[1024 * 8], uint4* x){
+
+	uint32_t y0, y1, y2, y3;
+	aes_round_32(sharedMemory, x->x, x->y, x->z, x->w, y0, y1, y2, y3);
+
+	x->x = y0;
+	x->y = y1;
+	x->z = y2;
+	x->w = y3;
+}
+
+__device__ __forceinline__
+static void AES_ROUND_NOKEY_32(const uint32_t sharedMemory[1024 * 8], uint32_t &x1, uint32_t &x2, uint32_t &x3, uint32_t &x4)
+{
+	uint32_t y0, y1, y2, y3;
+	aes_round_32(sharedMemory, x1, x2, x3, x4, y0, y1, y2, y3);
+
+	x1 = y0;
+	x2 = y1;
+	x3 = y2;
+	x4 = y3;
+}
+
+
+
+__device__ __forceinline__
+static void KEY_EXPAND_ELT_32(const uint32_t sharedMemory[1024 * 8], uint32_t &x1, uint32_t &x2, uint32_t &x3, uint32_t &x4)
+{
+
+	uint32_t y0, y1, y2, y3;
+	aes_round_32(sharedMemory, x1, x2, x3, x4, y0, y1, y2, y3);
+
+	x1 = y1;
+	x2 = y2;
+	x3 = y3;
+	x4 = y0;
+}
+
+
+__device__ __forceinline__
+static void KEY_EXPAND_ELT_32(const uint32_t sharedMemory[1024 * 8], uint32_t *k)
 {
 
 	uint32_t y0, y1, y2, y3;
@@ -482,4 +464,122 @@ static void KEY_EXPAND_ELT_32(const uint32_t sharedMemory[1024*8], uint32_t *k)
 	k[1] = y2;
 	k[2] = y3;
 	k[3] = y0;
+}
+
+
+__device__ __forceinline__
+void aes_gpu_init256_32(uint32_t sharedMemory[1024 * 8])
+{
+	/* each thread startup will fill a uint32 */
+	const uint32_t thread = threadIdx.x << 5;
+	uint32_t temp = __ldg(&d_AES0[threadIdx.x]);
+	sharedMemory[thread] = temp;
+	sharedMemory[1 + thread] = temp;
+	sharedMemory[2 + thread] = temp;
+	sharedMemory[3 + thread] = temp;
+	sharedMemory[4 + thread] = temp;
+	sharedMemory[5 + thread] = temp;
+	sharedMemory[6 + thread] = temp;
+	sharedMemory[7 + thread] = temp;
+	sharedMemory[8 + thread] = temp;
+	sharedMemory[9 + thread] = temp;
+	sharedMemory[10 + thread] = temp;
+	sharedMemory[11 + thread] = temp;
+	sharedMemory[12 + thread] = temp;
+	sharedMemory[13 + thread] = temp;
+	sharedMemory[14 + thread] = temp;
+	sharedMemory[15 + thread] = temp;
+	sharedMemory[16 + thread] = temp;
+	sharedMemory[17 + thread] = temp;
+	sharedMemory[18 + thread] = temp;
+	sharedMemory[19 + thread] = temp;
+	sharedMemory[20 + thread] = temp;
+	sharedMemory[21 + thread] = temp;
+	sharedMemory[22 + thread] = temp;
+	sharedMemory[23 + thread] = temp;
+	sharedMemory[24 + thread] = temp;
+	sharedMemory[25 + thread] = temp;
+	sharedMemory[26 + thread] = temp;
+	sharedMemory[27 + thread] = temp;
+	sharedMemory[28 + thread] = temp;
+	sharedMemory[29 + thread] = temp;
+	sharedMemory[30 + thread] = temp;
+	sharedMemory[31 + thread] = temp;
+}
+
+__device__ __forceinline__
+void aes_gpu_init128_32(uint32_t sharedMemory[1024 * 8])
+{
+	/* each thread startup will fill a uint32 */
+	const uint32_t thread = threadIdx.x << 5;
+	const uint32_t thread2 = ((threadIdx.x + 128) << 5);
+
+	uint32_t temp = __ldg(&d_AES0[threadIdx.x]);
+	uint32_t temp2 = __ldg(&d_AES0[threadIdx.x + 128]);
+	sharedMemory[thread] = temp;
+	sharedMemory[1 + thread] = temp;
+	sharedMemory[2 + thread] = temp;
+	sharedMemory[3 + thread] = temp;
+	sharedMemory[4 + thread] = temp;
+	sharedMemory[5 + thread] = temp;
+	sharedMemory[6 + thread] = temp;
+	sharedMemory[7 + thread] = temp;
+	sharedMemory[8 + thread] = temp;
+	sharedMemory[9 + thread] = temp;
+	sharedMemory[10 + thread] = temp;
+	sharedMemory[11 + thread] = temp;
+	sharedMemory[12 + thread] = temp;
+	sharedMemory[13 + thread] = temp;
+	sharedMemory[14 + thread] = temp;
+	sharedMemory[15 + thread] = temp;
+	sharedMemory[16 + thread] = temp;
+	sharedMemory[17 + thread] = temp;
+	sharedMemory[18 + thread] = temp;
+	sharedMemory[19 + thread] = temp;
+	sharedMemory[20 + thread] = temp;
+	sharedMemory[21 + thread] = temp;
+	sharedMemory[22 + thread] = temp;
+	sharedMemory[23 + thread] = temp;
+	sharedMemory[24 + thread] = temp;
+	sharedMemory[25 + thread] = temp;
+	sharedMemory[26 + thread] = temp;
+	sharedMemory[27 + thread] = temp;
+	sharedMemory[28 + thread] = temp;
+	sharedMemory[29 + thread] = temp;
+	sharedMemory[30 + thread] = temp;
+	sharedMemory[31 + thread] = temp;
+
+	sharedMemory[thread2] = temp2;
+	sharedMemory[1 + thread2] = temp2;
+	sharedMemory[2 + thread2] = temp2;
+	sharedMemory[3 + thread2] = temp2;
+	sharedMemory[4 + thread2] = temp2;
+	sharedMemory[5 + thread2] = temp2;
+	sharedMemory[6 + thread2] = temp2;
+	sharedMemory[7 + thread2] = temp2;
+	sharedMemory[8 + thread2] = temp2;
+	sharedMemory[9 + thread2] = temp2;
+	sharedMemory[10 + thread2] = temp2;
+	sharedMemory[11 + thread2] = temp2;
+	sharedMemory[12 + thread2] = temp2;
+	sharedMemory[13 + thread2] = temp2;
+	sharedMemory[14 + thread2] = temp2;
+	sharedMemory[15 + thread2] = temp2;
+	sharedMemory[16 + thread2] = temp2;
+	sharedMemory[17 + thread2] = temp2;
+	sharedMemory[18 + thread2] = temp2;
+	sharedMemory[19 + thread2] = temp2;
+	sharedMemory[20 + thread2] = temp2;
+	sharedMemory[21 + thread2] = temp2;
+	sharedMemory[22 + thread2] = temp2;
+	sharedMemory[23 + thread2] = temp2;
+	sharedMemory[24 + thread2] = temp2;
+	sharedMemory[25 + thread2] = temp2;
+	sharedMemory[26 + thread2] = temp2;
+	sharedMemory[27 + thread2] = temp2;
+	sharedMemory[28 + thread2] = temp2;
+	sharedMemory[29 + thread2] = temp2;
+	sharedMemory[30 + thread2] = temp2;
+	sharedMemory[31 + thread2] = temp2;
+
 }
