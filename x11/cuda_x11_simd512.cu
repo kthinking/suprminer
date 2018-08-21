@@ -13,7 +13,11 @@ optimized by sp - 2018 (+20% faster on the gtx 1080ti)
 //#include "cuda_x11_aes.cuh"
 #include "x15/cuda_whirlpool_tables.cuh"
 
-
+__device__ __forceinline__ uint32_t xor3(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(a) : "r"(b), "r"(c));	// 0xEA = (F0 ^ CC) ^ AA
+	return a;
+}
 //--------START OF WHIRLPOOL DEVICE MACROS---------------------------------------------------------------------------
 __device__ static uint64_t b0[256];
 __device__ static uint64_t b7[256];
@@ -1244,6 +1248,205 @@ static void x16_simd512_gpu_compress_64_echo512(uint32_t *g_hash, const uint4 *c
 	*(uint2x4*)&Hash[8] = *(uint2x4*)&Hash[8] ^ *(uint2x4*)&W[8];
 }
 
+__global__ __launch_bounds__(256, 3)
+void x16_simd512_gpu_compress_64_maxwell_echo512_final(const uint32_t* __restrict__ g_hash, uint32_t startnonce, const uint4 *const __restrict__ g_fft4, uint32_t* resNonce, const uint64_t target)
+{
+	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	const uint32_t thr_offset = thread << 6; // thr_id * 128 (je zwei elemente)
+
+	__shared__ uint32_t sharedMemory[1024 * 8];
+
+	aes_gpu_init256_32(sharedMemory);
+
+	const uint32_t P[48] = {
+		0xe7e9f5f5, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xa4213d7e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x01425eb8, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0x65978b09, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x2cb6b661, 0x6b23b3b3, 0xcf93a7cf, 0x9d9d3751, 0x9ac2dea3, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x579f9f33, 0xfbfbfbfb, 0xfbfbfbfb, 0xefefd3c7, 0xdbfde1dd, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
+		0x34514d9e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xb134347e, 0xea6f7e7e, 0xbd7731bd, 0x8a8a1968,
+		0x14b8a457, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0x265f4382, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af
+	};
+	uint32_t k0;
+	uint32_t h[16];
+
+	//	if (thread < threads){
+
+	const uint32_t* __restrict__ Hash = &g_hash[thread << 4];
+
+	uint32_t A[32];
+
+	*(uint2x4*)&A[0] = *(uint2x4*)&c_IV_512[0] ^ __ldg4((uint2x4*)&Hash[0]);
+	*(uint2x4*)&A[8] = *(uint2x4*)&c_IV_512[8] ^ __ldg4((uint2x4*)&Hash[8]);
+	*(uint2x4*)&A[16] = *(uint2x4*)&c_IV_512[16];
+	*(uint2x4*)&A[24] = *(uint2x4*)&c_IV_512[24];
+
+	SIMD_Compress(A, thr_offset, g_fft4);
+
+#pragma unroll 16
+	for (int i = 0; i<16; i++){
+		h[i] = A[i];
+	}
+
+	uint64_t backup = *(uint64_t*)&h[6];
+
+	k0 = 512 + 8;
+
+#pragma unroll 3
+	for (uint32_t idx = 0; idx < 16; idx += 4){
+		AES_2ROUND_32(sharedMemory, h[idx + 0], h[idx + 1], h[idx + 2], h[idx + 3], k0);
+		idx += 4;
+		AES_2ROUND_32(sharedMemory, h[idx + 0], h[idx + 1], h[idx + 2], h[idx + 3], k0);
+	}
+	k0 += 4;
+
+	uint32_t W[64];
+
+	//		#pragma unroll 4
+	for (int i = 0; i < 4; i++){
+		uint32_t a = P[i];
+		uint32_t b = P[i + 4];
+		uint32_t c = h[i + 8];
+		uint32_t d = P[i + 8];
+
+		uint32_t ab = a ^ b;
+		uint32_t bc = b ^ c;
+		uint32_t cd = c ^ d;
+
+
+		uint32_t t = ((a ^ b) & 0x80808080);
+		uint32_t t2 = ((b ^ c) & 0x80808080);
+		uint32_t t3 = ((c ^ d) & 0x80808080);
+
+		uint32_t abx = ((t >> 7) * 27U) ^ ((ab^t) << 1);
+		uint32_t bcx = ((t2 >> 7) * 27U) ^ ((bc^t2) << 1);
+		uint32_t cdx = ((t3 >> 7) * 27U) ^ ((cd^t3) << 1);
+
+		W[0U + i] = bc ^ d ^ abx;
+		W[4U + i] = a ^ cd ^ bcx;
+		W[8U + i] = ab ^ d ^ cdx;
+		W[12U + i] = abx ^ bcx ^ cdx ^ ab ^ c;
+
+		a = P[12U + i];
+		b = h[i + 4U];
+		c = P[12U + i + 4U];
+		d = P[12U + i + 8U];
+
+		ab = a ^ b;
+		bc = b ^ c;
+		cd = c ^ d;
+
+
+		t = (ab & 0x80808080);
+		t2 = (bc & 0x80808080);
+		t3 = (cd & 0x80808080);
+
+		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
+		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
+
+		W[16U + i] = abx ^ bc ^ d;
+		W[16U + i + 4U] = bcx ^ a ^ cd;
+		W[16U + i + 8U] = cdx ^ ab ^ d;
+		W[16U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
+
+		a = h[i];
+		b = P[24U + i + 0U];
+		c = P[24U + i + 4U];
+		d = P[24U + i + 8U];
+
+		ab = a ^ b;
+		bc = b ^ c;
+		cd = c ^ d;
+
+
+		t = (ab & 0x80808080);
+		t2 = (bc & 0x80808080);
+		t3 = (cd & 0x80808080);
+
+		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
+		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
+
+		W[32U + i] = abx ^ bc ^ d;
+		W[32U + i + 4U] = bcx ^ a ^ cd;
+		W[32U + i + 8U] = cdx ^ ab ^ d;
+		W[32U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
+
+		a = P[36U + i];
+		b = P[36U + i + 4U];
+		c = P[36U + i + 8U];
+		d = h[i + 12U];
+
+		ab = a ^ b;
+		bc = b ^ c;
+		cd = c ^ d;
+
+		t = (ab & 0x80808080);
+		t2 = (bc & 0x80808080);
+		t3 = (cd & 0x80808080);
+
+		abx = (t >> 7) * 27U ^ ((ab^t) << 1);
+		bcx = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+		cdx = (t3 >> 7) * 27U ^ ((cd^t3) << 1);
+
+		W[48U + i] = abx ^ bc ^ d;
+		W[48U + i + 4U] = bcx ^ a ^ cd;
+		W[48U + i + 8U] = cdx ^ ab ^ d;
+		W[48U + i + 12U] = abx ^ bcx ^ cdx ^ ab ^ c;
+	}
+
+	for (int k = 1; k < 9; k++){
+		echo_round_sp(sharedMemory, W, k0);
+	}
+
+	// Big Sub Words
+	uint32_t y[4];
+	aes_round_32(sharedMemory, W[0], W[1], W[2], W[3], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[0], W[1], W[2], W[3]);
+	aes_round_32(sharedMemory, W[4], W[5], W[6], W[7], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[4], W[5], W[6], W[7]);
+	aes_round_32(sharedMemory, W[8], W[9], W[10], W[11], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[8], W[9], W[10], W[11]);
+	aes_round_32(sharedMemory, W[20], W[21], W[22], W[23], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[20], W[21], W[22], W[23]);
+	aes_round_32(sharedMemory, W[28], W[29], W[30], W[31], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[28], W[29], W[30], W[31]);
+	aes_round_32(sharedMemory, W[32], W[33], W[34], W[35], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[32], W[33], W[34], W[35]);
+	aes_round_32(sharedMemory, W[40], W[41], W[42], W[43], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[40], W[41], W[42], W[43]);
+	aes_round_32(sharedMemory, W[52], W[53], W[54], W[55], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[52], W[53], W[54], W[55]);
+	aes_round_32(sharedMemory, W[60], W[61], W[62], W[63], k0, y[0], y[1], y[2], y[3]);
+	aes_round_32(sharedMemory, y[0], y[1], y[2], y[3], W[60], W[61], W[62], W[63]);
+
+	uint32_t bc = W[22] ^ W[42];
+	uint32_t t2 = (bc & 0x80808080);
+	W[6] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+
+	bc = W[23] ^ W[43];
+	t2 = (bc & 0x80808080);
+	W[7] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+
+	bc = W[10] ^ W[54];
+	t2 = (bc & 0x80808080);
+	W[38] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+
+	bc = W[11] ^ W[55];
+	t2 = (bc & 0x80808080);
+	W[39] = (t2 >> 7) * 27U ^ ((bc^t2) << 1);
+
+	uint64_t check = backup ^ *(uint64_t*)&W[2] ^ *(uint64_t*)&W[6] ^ *(uint64_t*)&W[10] ^ *(uint64_t*)&W[30] ^ *(uint64_t*)&W[34] ^ *(uint64_t*)&W[38] ^ *(uint64_t*)&W[42] ^ *(uint64_t*)&W[62];
+	uint32_t nonce = thread + startnonce;
+
+	if (check <= target)
+	{
+		uint32_t tmp = atomicExch(&resNonce[0], nonce);
+		if (tmp != UINT32_MAX)
+			resNonce[1] = tmp;
+	}
+	//	}
+}
 
 __global__ //__launch_bounds__(128, 5)
 static void x16_simd512_gpu_compress_64_whirlpool512(uint32_t *g_hash, const uint4 *const __restrict__ g_fft4)
@@ -1450,6 +1653,25 @@ void x16_simd_echo512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash
 	x11_simd512_gpu_expand_64 << <grid1, block1 >> > (threads, d_hash, d_temp4[thr_id]);
 	x16_simd512_gpu_compress_64_echo512 << < grid2, block2 >> > (d_hash, d_temp4[thr_id]);
 }
+
+__host__
+void x16_simd_echo512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t startnonce, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target)
+{
+
+	int dev_id = device_map[thr_id];
+
+	uint32_t tpb = 128;
+	const dim3 grid1((8 * threads + tpb - 1) / tpb);
+	const dim3 block1(tpb);
+
+	tpb = 256;
+	const dim3 grid2((threads + tpb - 1) / tpb);
+	const dim3 block2(tpb);
+
+	x11_simd512_gpu_expand_64 << <grid1, block1 >> > (threads, d_hash, d_temp4[thr_id]);
+	x16_simd512_gpu_compress_64_maxwell_echo512_final << < grid2, block2 >> > (d_hash, startnonce, d_temp4[thr_id], d_resNonce, target);
+}
+
 
 __host__
 void x16_simd_whirlpool512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash)
