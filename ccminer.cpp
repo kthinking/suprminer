@@ -236,68 +236,9 @@ static char const usage[] = "\
 Usage: " PROGRAM_NAME " [OPTIONS]\n\
 Options:\n\
   -a, --algo=ALGO       specify the hash algorithm to use\n\
-			bastion     Hefty bastion\n\
-			bitcore     Timetravel-10\n\
-			blake       Blake 256 (SFR)\n\
-			blake2s     Blake2-S 256 (NEVA)\n\
-			blakecoin   Fast Blake 256 (8 rounds)\n\
-			bmw         BMW 256\n\
-			cryptolight AEON cryptonight (MEM/2)\n\
-			cryptonight XMR cryptonight\n\
 			c11/flax    X11 variant\n\
-			decred      Decred Blake256\n\
-			deep        Deepcoin\n\
-			equihash    Zcash Equihash\n\
-			dmd-gr      Diamond-Groestl\n\
-			fresh       Freshcoin (shavite 80)\n\
-			fugue256    Fuguecoin\n\
-			groestl     Groestlcoin\n"
-#ifdef WITH_HEAVY_ALGO
-"			heavy       Heavycoin\n"
-#endif
-"			hmq1725     Doubloons / Espers\n\
-			jackpot     JHA v8\n\
-			keccak      Deprecated Keccak-256\n\
-			keccakc     Keccak-256 (CreativeCoin)\n\
-			lbry        LBRY Credits (Sha/Ripemd)\n\
-			luffa       Joincoin\n\
-			lyra2       CryptoCoin\n\
-			lyra2v2     VertCoin\n\
-			lyra2z      ZeroCoin (3rd impl)\n\
-			myr-gr      Myriad-Groestl\n\
-			neoscrypt   FeatherCoin, Phoenix, UFO...\n\
-			nist5       NIST5 (TalkCoin)\n\
-			penta       Pentablake hash (5x Blake 512)\n\
-			phi         BHCoin\n\
-			polytimos   Politimos\n\
-			quark       Quark\n\
-			qubit       Qubit\n\
-			sha256d     SHA256d (bitcoin)\n\
-			sha256t     SHA256 x3\n\
-			sia         SIA (Blake2B)\n\
-			sib         Sibcoin (X11+Streebog)\n\
-			scrypt      Scrypt\n\
-			scrypt-jane Scrypt-jane Chacha\n\
-			skein       Skein SHA2 (Skeincoin)\n\
-			skein2      Double Skein (Woodcoin)\n\
-			skunk       Skein Cube Fugue Streebog\n\
-			s3          S3 (1Coin)\n\
-			timetravel  Machinecoin permuted x8\n\
-			tribus      Denarius\n\
-			vanilla     Blake256-8 (VNL)\n\
-			veltor      Thorsriddle streebog\n\
-			whirlcoin   Old Whirlcoin (Whirlpool algo)\n\
-			whirlpool   Whirlpool algo\n\
-			x11evo      Permuted x11 (Revolver)\n\
-			x11         X11 (DarkCoin)\n\
-			x13         X13 (MaruCoin)\n\
-			x14         X14\n\
-			x15         X15\n\
 			x16r        X16R (Raven)\n\
 			x16s	    X16S (Pidgeon)\n\
-			x17         X17\n\
-			wildkeccak  Boolberry\n\
-			zr5         ZR5 (ZiftrCoin)\n\
   -d, --devices         Comma separated list of CUDA devices to use.\n\
                         Device IDs start counting from 0! Alternatively takes\n\
                         string names of your cards like gtx780ti or gt640#2\n\
@@ -2325,8 +2266,9 @@ static void *miner_thread(void *userdata)
 		work.valid_nonces = 0;
 
 		/* scan nonces for a proof-of-work hash */
-		switch (opt_algo) {
-
+		switch (opt_algo) 
+		{
+		/*
 		case ALGO_BASTION:
 			rc = scanhash_bastion(thr_id, &work, max_nonce, &hashes_done);
 			break;
@@ -2342,10 +2284,11 @@ static void *miner_thread(void *userdata)
 		case ALGO_BMW:
 			rc = scanhash_bmw(thr_id, &work, max_nonce, &hashes_done);
 			break;
+*/
 		case ALGO_C11:
 			rc = scanhash_c11(thr_id, &work, max_nonce, &hashes_done);
 			break;
-		case ALGO_CRYPTOLIGHT:
+/*		case ALGO_CRYPTOLIGHT:
 			rc = scanhash_cryptolight(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_CRYPTONIGHT:
@@ -2366,7 +2309,6 @@ static void *miner_thread(void *userdata)
 		case ALGO_FUGUE256:
 			rc = scanhash_fugue256(thr_id, &work, max_nonce, &hashes_done);
 			break;
-
 		case ALGO_GROESTL:
 		case ALGO_DMD_GR:
 			rc = scanhash_groestlcoin(thr_id, &work, max_nonce, &hashes_done);
@@ -2509,19 +2451,19 @@ static void *miner_thread(void *userdata)
 		case ALGO_X15:
 			rc = scanhash_x15(thr_id, &work, max_nonce, &hashes_done);
 			break;
-		case ALGO_X16R:
+*/		case ALGO_X16R:
 			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
 			break;
         case ALGO_X16S:
             rc = scanhash_x16s(thr_id, &work, max_nonce, &hashes_done);
 			break;
-		case ALGO_X17:
+/*		case ALGO_X17:
 			rc = scanhash_x17(thr_id, &work, max_nonce, &hashes_done);
 			break;
 		case ALGO_ZR5:
 			rc = scanhash_zr5(thr_id, &work, max_nonce, &hashes_done);
 			break;
-
+*/
 		default:
 			/* should never happen */
 			goto out;
