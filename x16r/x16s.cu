@@ -838,7 +838,12 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 				if (addstart && (h_resNonce[thr_id][1] != UINT32_MAX))
 				{
 					work->nonces[1] = h_resNonce[thr_id][1] + pdata[19];
+				}	
+				else
+				{
+					work->nonces[1] = UINT32_MAX;
 				}
+
 				if (!addstart)
 				{
 					work->nonces[1] = cuda_check_hash_suppl(thr_id, throughput, pdata[19], d_hash[thr_id], 1);

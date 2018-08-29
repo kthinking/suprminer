@@ -293,8 +293,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		((uint32_t*)ptarget)[7] = 0x00f;
 		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 		//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0x99999999;
-		((uint32_t*)pdata)[2] = 0x99999999;
+		((uint32_t*)pdata)[1] = 0xdddddddd;
+		((uint32_t*)pdata)[2] = 0xdddddddd;
 
 		//		94E3A654 CBD9B14B
 
@@ -869,6 +869,10 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				if (addstart && (h_resNonce[thr_id][1] != UINT32_MAX))
 				{
 					work->nonces[1] = h_resNonce[thr_id][1] + pdata[19];
+				}
+				else
+				{
+					work->nonces[1] = UINT32_MAX;
 				}
 				if (!addstart)
 				{
