@@ -1857,7 +1857,7 @@ static void *miner_thread(void *userdata)
 				sleeptime++;
 			}
 			if (sleeptime && opt_debug && !opt_quiet)
-				applog(LOG_DEBUG, "sleeptime: %u ms", sleeptime*100);
+				applog(LOG_DEBUG, "sleeptime: %u ms", sleeptime);
 			
 			//nonceptr = (uint32_t*) (((char*)work.data) + wcmplen);
 			pthread_mutex_lock(&g_work_lock);
@@ -2152,12 +2152,12 @@ static void *miner_thread(void *userdata)
 			}
 		}
 
-		max64 *= (uint32_t)thr_hashrates[thr_id];
+//		max64 *= (uint32_t)thr_hashrates[thr_id];
 
 		/* on start, max64 should not be 0,
 		 *    before hashrate is computed */
-		if (max64 < minmax) {
-			switch (opt_algo) {
+//		if (max64 < minmax) {
+/*			switch (opt_algo) {
 			case ALGO_BLAKECOIN:
 			case ALGO_BLAKE2S:
 			case ALGO_VANILLA:
@@ -2171,6 +2171,11 @@ static void *miner_thread(void *userdata)
 			//case ALGO_WHIRLPOOLX:
 				minmax = 0x40000000U;
 				break;
+			case ALGO_X16R:
+			case ALGO_X16S:
+				minmax = 0x40000000U;
+				break;
+
 			case ALGO_KECCAK:
 			case ALGO_KECCAKC:
 			case ALGO_LBRY:
@@ -2179,8 +2184,6 @@ static void *miner_thread(void *userdata)
 			case ALGO_SKEIN:
 			case ALGO_SKEIN2:
 			case ALGO_TRIBUS:
-			case ALGO_X16R:
-			case ALGO_X16S:
 				minmax = 0x1000000;
 				break;
 			case ALGO_C11:
@@ -2221,8 +2224,11 @@ static void *miner_thread(void *userdata)
 				minmax = 0x1000;
 				break;
 			}
-			max64 = max(minmax-1, max64);
-		}
+*/
+			minmax = 0xffffffffU / opt_n_threads;
+			max64 = max(minmax - 1, max64);
+//		}
+
 
 		// we can't scan more than uint32 capacity
 		max64 = min(UINT32_MAX, max64);
