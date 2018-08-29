@@ -904,7 +904,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 					be32enc(&endiandata[19], work->nonces[1]);
 					pdata[21] = work->nonces[1];
 					x16r_hash(vhash64, endiandata);
-					if (vhash64[7] != ptarget[7]) gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", work->nonces[1]);
+					if (vhash64[7] > ptarget[7] && !fulltest(vhash64, ptarget)) gpulog(LOG_WARNING, thr_id, "result for %08x does not validate on CPU!", work->nonces[1]);
 					/*if (bn_hash_target_ratio(vhash64, ptarget) > work->shareratio[0])
 					{
 						work_set_target_ratio(work, vhash64);
@@ -923,7 +923,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			}
 		pdata[19] += throughput;
 		} while (!work_restart[thr_id].restart && ((uint64_t)max_nonce > (uint64_t)throughput + pdata[19]));
-	cudaDeviceSynchronize();
+
+		cudaDeviceSynchronize();
 	*hashes_done = pdata[19] - first_nonce;
 	return 0;
 }

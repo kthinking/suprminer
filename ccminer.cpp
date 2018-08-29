@@ -1921,7 +1921,8 @@ static void *miner_thread(void *userdata)
 			wcmplen -= 4;
 		}
 
-		if (opt_algo == ALGO_CRYPTONIGHT || opt_algo == ALGO_CRYPTOLIGHT) {
+		if (opt_algo == ALGO_CRYPTONIGHT || opt_algo == ALGO_CRYPTOLIGHT) 
+		{
 			uint32_t oldpos = nonceptr[0];
 			bool nicehash = strstr(pools[cur_pooln].url, "nicehash") != NULL;
 			if (memcmp(&work.data[wcmpoft], &g_work.data[wcmpoft], wcmplen)) {
@@ -2020,7 +2021,7 @@ static void *miner_thread(void *userdata)
 		else nodata_check_oft = 0;
 		if (have_stratum && work.data[nodata_check_oft] == 0 && !opt_benchmark) 
 		{
-			sleep(1);
+			usleep(1);
 			if (!thr_id) pools[cur_pooln].wait_time += 1;
 			gpulog(LOG_DEBUG, thr_id, "no data");
 			continue;
@@ -2239,17 +2240,21 @@ static void *miner_thread(void *userdata)
 		if (end_nonce >= UINT32_MAX - 256)
 			end_nonce = UINT32_MAX;
 
-		if ((max64 + start_nonce) >= end_nonce)
-			max_nonce = end_nonce;
-		else
-			max_nonce = (uint32_t) (max64 + start_nonce);
+		max_nonce = end_nonce;
+
+//		if ((max64 + start_nonce) >= end_nonce)
+//			max_nonce = end_nonce;
+//		else
+//			max_nonce = (uint32_t) (max64 + start_nonce);
 
 		// todo: keep it rounded to a multiple of 256 ?
 
-		if (unlikely(start_nonce > max_nonce)) {
+//		if (unlikely(start_nonce > max_nonce)) 
+//		{
 			// should not happen but seen in skein2 benchmark with 2 gpus
-			max_nonce = end_nonce = UINT32_MAX;
-		}
+//			max_nonce = end_nonce = UINT32_MAX;
+//		}
+
 
 		work.scanned_from = start_nonce;
 
@@ -2461,7 +2466,7 @@ static void *miner_thread(void *userdata)
 			rc = scanhash_x15(thr_id, &work, max_nonce, &hashes_done);
 			break;
 */		case ALGO_X16R:
-			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
+		rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
 			break;
         case ALGO_X16S:
             rc = scanhash_x16s(thr_id, &work, max_nonce, &hashes_done);
@@ -2543,14 +2548,14 @@ static void *miner_thread(void *userdata)
 		}
 
 		if (rc > 0)
-			work.scanned_to = work.nonces[0];
+			work.scanned_to = start_nonce + hashes_done;
 		if (rc > 1)
-			work.scanned_to = max(work.nonces[0], work.nonces[1]);
+			work.scanned_to = start_nonce + hashes_done;
 		else {
 			work.scanned_to = max_nonce;
 			if (opt_debug && opt_benchmark) {
 				// to debug nonce ranges
-				gpulog(LOG_DEBUG, thr_id, "ends=%08x range=%08x", nonceptr[0], (nonceptr[0] - start_nonce));
+				gpulog(LOG_DEBUG, thr_id, "ends=%08x range=%08x", nonceptr[0], (work.scanned_to - start_nonce));
 			}
 			// prevent low scan ranges on next loop on fast algos (blake)
 			if (nonceptr[0] > UINT32_MAX - 64)
@@ -2629,7 +2634,8 @@ static void *miner_thread(void *userdata)
 			}
 
 			// second nonce found, submit too (on pool only!)
-			if (rc > 1 && work.nonces[1]) {
+			if (rc > 1 && work.nonces[1]) 
+			{
 				work.submit_nonce_id = 1;
 				nonceptr[0] = work.nonces[1];
 				if (opt_algo == ALGO_ZR5) {
@@ -2641,6 +2647,7 @@ static void *miner_thread(void *userdata)
 				nonceptr[0] = curnonce;
 				work.nonces[1] = 0; // reset
 			}
+			nonceptr[0] = start_nonce+hashes_done;
 		}
 	}
 
