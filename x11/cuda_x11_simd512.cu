@@ -737,7 +737,7 @@ void x11_simd512_gpu_compress_64_pascal_final(uint32_t threads, uint32_t startno
 		{
 			uint32_t tmp = atomicExch(&d_resNonce[0], nonce);
 			if (tmp != UINT32_MAX)
-				d_resNonce[1] = tmp;
+				if (tmp != d_resNonce[0] ) d_resNonce[1] = tmp;
 		}
 
 

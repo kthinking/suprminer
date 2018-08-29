@@ -264,6 +264,28 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 	const int dev_id = device_map[thr_id];
 
 
+
+	if (opt_benchmark) {
+		((uint32_t*)ptarget)[7] = 0x003ff;
+		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
+		//		((uint32_t*)pdata)[2] = 0x76543210;
+		((uint32_t*)pdata)[1] = 0x01234567;
+		((uint32_t*)pdata)[2] = 0x89ABCDEF;
+
+		//		94E3A654 CBD9B14B
+
+		//		((uint32_t*)pdata)[1] = 0x01234567;
+		//		((uint32_t*)pdata)[2] = 0x22222222;
+		//		((uint32_t*)pdata)[1] = 0x01234567;
+		//		((uint32_t*)pdata)[2] = 0x89ABCDEF;
+		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xC0; // hashOrder[0] = 'C'; for fugue 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xE0; // hashOrder[0] = 'E'; for whirlpool 80 + blake512 64
+	}
+
+
 	uint32_t _ALIGN(64) endiandata[20];
 
 	for (int k = 0; k < 19; k++)
@@ -387,28 +409,6 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		cuda_check_cpu_init(thr_id, throughput);
 		sleep(2);
 		init[thr_id] = true;
-	}
-
-
-
-	if (opt_benchmark) {
-		((uint32_t*)ptarget)[7] = 0x003ff;
-		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
-		//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0x01234567;
-		((uint32_t*)pdata)[2] = 0x89ABCDEF;
-
-		//		94E3A654 CBD9B14B
-
-		//		((uint32_t*)pdata)[1] = 0x01234567;
-		//		((uint32_t*)pdata)[2] = 0x22222222;
-		//		((uint32_t*)pdata)[1] = 0x01234567;
-		//		((uint32_t*)pdata)[2] = 0x89ABCDEF;
-		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xC0; // hashOrder[0] = 'C'; for fugue 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xE0; // hashOrder[0] = 'E'; for whirlpool 80 + blake512 64
 	}
 	cuda_check_cpu_setTarget(ptarget);
 

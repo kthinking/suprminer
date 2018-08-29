@@ -288,6 +288,27 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 	if (strstr(device_name[dev_id], "GTX 1050")) intensity = 18;
 	uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
 */
+
+	if (opt_benchmark) {
+		((uint32_t*)ptarget)[7] = 0x00f;
+		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
+		//		((uint32_t*)pdata)[2] = 0x76543210;
+		((uint32_t*)pdata)[1] = 0x99999999;
+		((uint32_t*)pdata)[2] = 0x99999999;
+
+		//		94E3A654 CBD9B14B
+
+		//		((uint32_t*)pdata)[1] = 0x01234567;
+		//		((uint32_t*)pdata)[2] = 0x22222222;
+		//		((uint32_t*)pdata)[1] = 0x01234567;
+		//		((uint32_t*)pdata)[2] = 0x89ABCDEF;
+		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xC0; // hashOrder[0] = 'C'; for fugue 80 + blake512 64
+		//((uint8_t*)pdata)[8] = 0xE0; // hashOrder[0] = 'E'; for whirlpool 80 + blake512 64
+	}
+
 	uint32_t _ALIGN(64) endiandata[20];
 
 	for (int k = 0; k < 19; k++)
@@ -409,27 +430,6 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		init[thr_id] = true;
 	}
 	
-
-
-	if (opt_benchmark) {
-		((uint32_t*)ptarget)[7] = 0x003ff;
-//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
-//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0x9A9A9A9A;
-		((uint32_t*)pdata)[2] = 0x9A9A9A9A;
-
-//		94E3A654 CBD9B14B
-
-//		((uint32_t*)pdata)[1] = 0x01234567;
-//		((uint32_t*)pdata)[2] = 0x22222222;
-//		((uint32_t*)pdata)[1] = 0x01234567;
-//		((uint32_t*)pdata)[2] = 0x89ABCDEF;
-		//((uint8_t*)pdata)[8] = 0x90; // hashOrder[0] = '9'; for simd 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xA0; // hashOrder[0] = 'A'; for echo 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xC0; // hashOrder[0] = 'C'; for fugue 80 + blake512 64
-		//((uint8_t*)pdata)[8] = 0xE0; // hashOrder[0] = 'E'; for whirlpool 80 + blake512 64
-	}
 
 	cuda_check_cpu_setTarget(ptarget);
 
@@ -916,8 +916,11 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			}
 		pdata[19] += throughput;
 		} while (!work_restart[thr_id].restart && ((uint64_t)max_nonce > (uint64_t)throughput + pdata[19]));
-		cudaDeviceSynchronize();
+	cudaDeviceSynchronize();
 	*hashes_done = pdata[19] - first_nonce;
+
+	gpulog(LOG_WARNING, thr_id, "exit");
+
 	return 0;
 }
 
