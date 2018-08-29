@@ -288,6 +288,23 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 	if (strstr(device_name[dev_id], "GTX 1050")) intensity = 18;
 	uint32_t throughput = cuda_default_throughput(thr_id, 1U << intensity);
 */
+	uint32_t _ALIGN(64) endiandata[20];
+
+	for (int k = 0; k < 19; k++)
+		be32enc(&endiandata[k], pdata[k]);
+
+	uint32_t ntime = swab32(pdata[17]);
+	if (s_ntime != ntime)
+	{
+		getAlgoString(&endiandata[1], hashOrder);
+		s_ntime = ntime;
+		if (thr_id==0)
+		{
+			applog(LOG_INFO, "hash order %s (%08x)", hashOrder, ntime);
+			cudaDeviceSynchronize();
+		}
+	}
+
 	uint32_t default_throughput=1<<19;
 	bool splitsimd = true;
 	bool merge = false;
@@ -343,6 +360,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 
 	if (!init[thr_id])
 	{
+
 		cudaSetDevice(device_map[thr_id]);
 		if (opt_cudaschedule == -1 && gpu_threads == 1) 
 		{
@@ -397,8 +415,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		((uint32_t*)ptarget)[7] = 0x003ff;
 //		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 //		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0x99999999;
-		((uint32_t*)pdata)[2] = 0x99999999;
+		((uint32_t*)pdata)[1] = 0x9A9A9A9A;
+		((uint32_t*)pdata)[2] = 0x9A9A9A9A;
 
 //		94E3A654 CBD9B14B
 
@@ -411,17 +429,6 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		//((uint8_t*)pdata)[8] = 0xB0; // hashOrder[0] = 'B'; for hamsi 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xC0; // hashOrder[0] = 'C'; for fugue 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xE0; // hashOrder[0] = 'E'; for whirlpool 80 + blake512 64
-	}
-	uint32_t _ALIGN(64) endiandata[20];
-
-	for (int k=0; k < 19; k++)
-		be32enc(&endiandata[k], pdata[k]);
-
-	uint32_t ntime = swab32(pdata[17]);
-	if (s_ntime != ntime) {
-		getAlgoString(&endiandata[1], hashOrder);
-		s_ntime = ntime;
-		if (!thr_id) applog(LOG_INFO, "hash order %s (%08x)", hashOrder, ntime);
 	}
 
 	cuda_check_cpu_setTarget(ptarget);
@@ -840,12 +847,14 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 
 			if (addstart) work->nonces[0] += pdata[19];
 
-			if (work_restart[thr_id].restart)
+			/*if (work_restart[thr_id].restart)
 			{
-				//				gpulog(LOG_WARNING, thr_id, "restart");
 				pdata[19] += throughput;
+				cudaDeviceSynchronize();
+				gpulog(LOG_WARNING, thr_id, "restart");
 				goto out;
-			}
+			}*/
+
 			uint32_t _ALIGN(64) vhash64[8];
 			//			const uint32_t Htarg = ptarget[7];
 			be32enc(&endiandata[19], work->nonces[0]);
@@ -897,6 +906,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 					}
 					res++;
 				}
+				cudaDeviceSynchronize();
 				return res;
 		}
 			else
@@ -906,8 +916,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			}
 		pdata[19] += throughput;
 		} while (!work_restart[thr_id].restart && ((uint64_t)max_nonce > (uint64_t)throughput + pdata[19]));
-
-out:
+		cudaDeviceSynchronize();
 	*hashes_done = pdata[19] - first_nonce;
 	return 0;
 }

@@ -262,6 +262,24 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 	uint32_t *ptarget = work->target;
 	const uint32_t first_nonce = pdata[19];
 	const int dev_id = device_map[thr_id];
+
+
+	uint32_t _ALIGN(64) endiandata[20];
+
+	for (int k = 0; k < 19; k++)
+		be32enc(&endiandata[k], pdata[k]);
+
+	uint32_t ntime = swab32(pdata[17]);
+	if (s_ntime != ntime)
+	{
+		getAlgoString(&endiandata[1], hashOrder);
+		s_ntime = ntime;
+		if (thr_id==0) applog(LOG_INFO, "hash order %s (%08x)", hashOrder, ntime);
+		cudaDeviceSynchronize();
+	}
+
+
+
 	/*	int intensity = (device_sm[dev_id] > 500 ) ? 20 : 18;
 	if (strstr(device_name[dev_id], "GTX 1080")) intensity = 21;
 	if (strstr(device_name[dev_id], "GTX 1060")) intensity = 19;
@@ -392,19 +410,6 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		//((uint8_t*)pdata)[8] = 0xC0; // hashOrder[0] = 'C'; for fugue 80 + blake512 64
 		//((uint8_t*)pdata)[8] = 0xE0; // hashOrder[0] = 'E'; for whirlpool 80 + blake512 64
 	}
-	uint32_t _ALIGN(64) endiandata[20];
-
-	for (int k = 0; k < 19; k++)
-		be32enc(&endiandata[k], pdata[k]);
-
-	uint32_t ntime = swab32(pdata[17]);
-	if (s_ntime != ntime) 
-	{
-		getAlgoString(&endiandata[1], hashOrder);
-		s_ntime = ntime;
-		if (!thr_id) applog(LOG_INFO, "hash order %s (%08x)", hashOrder, ntime);
-	}
-
 	cuda_check_cpu_setTarget(ptarget);
 
 	char elem = hashOrder[0];
@@ -817,15 +822,8 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		if (work->nonces[0] != UINT32_MAX)
 		{
 			if (opt_benchmark) gpulog(LOG_BLUE, dev_id, "found");
-
 			if (addstart) work->nonces[0] += pdata[19];
 
-			if (work_restart[thr_id].restart)
-			{
-				//				gpulog(LOG_WARNING, thr_id, "restart");
-				pdata[19] += throughput;
-				goto out;
-			}
 			uint32_t _ALIGN(64) vhash64[8];
 			//			const uint32_t Htarg = ptarget[7];
 			be32enc(&endiandata[19], work->nonces[0]);
@@ -877,6 +875,7 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 					}
 					res++;
 				}
+				cudaDeviceSynchronize();
 				return res;
 			}
 			else
@@ -887,7 +886,7 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		pdata[19] += throughput;
 	} while (!work_restart[thr_id].restart && ((uint64_t)max_nonce > (uint64_t)throughput + pdata[19]));
 
-out:
+	cudaDeviceSynchronize();
 	*hashes_done = pdata[19] - first_nonce;
 	return 0;
 }

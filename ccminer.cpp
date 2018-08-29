@@ -1841,13 +1841,15 @@ static void *miner_thread(void *userdata)
 			wcmplen = 4+32+32;
 		}
 
-		if (have_stratum) {
+		if (have_stratum) 
+		{
 			uint32_t sleeptime = 0;
 
 			if (opt_algo == ALGO_DECRED || opt_algo == ALGO_WILDKECCAK /* getjob */)
 				work_done = true; // force "regen" hash
-			while (!work_done && time(NULL) >= (g_work_time + opt_scantime)) {
-				usleep(100*1000);
+			while (!work_done && time(NULL) >= (g_work_time + opt_scantime)) 
+			{
+				Sleep(1);
 				if (sleeptime > 4) {
 					extrajob = true;
 					break;
@@ -1856,6 +1858,7 @@ static void *miner_thread(void *userdata)
 			}
 			if (sleeptime && opt_debug && !opt_quiet)
 				applog(LOG_DEBUG, "sleeptime: %u ms", sleeptime*100);
+			
 			//nonceptr = (uint32_t*) (((char*)work.data) + wcmplen);
 			pthread_mutex_lock(&g_work_lock);
 			extrajob |= work_done;
@@ -2015,7 +2018,8 @@ static void *miner_thread(void *userdata)
 		if (opt_algo == ALGO_SIA) nodata_check_oft = 7; // no stratum version
 		else if (opt_algo == ALGO_DECRED) nodata_check_oft = 4; // testnet ver is 0
 		else nodata_check_oft = 0;
-		if (have_stratum && work.data[nodata_check_oft] == 0 && !opt_benchmark) {
+		if (have_stratum && work.data[nodata_check_oft] == 0 && !opt_benchmark) 
+		{
 			sleep(1);
 			if (!thr_id) pools[cur_pooln].wait_time += 1;
 			gpulog(LOG_DEBUG, thr_id, "no data");
@@ -2551,7 +2555,7 @@ static void *miner_thread(void *userdata)
 		if (opt_debug && check_dups && opt_algo != ALGO_DECRED && opt_algo != ALGO_EQUIHASH && opt_algo != ALGO_SIA)
 			hashlog_remember_scan_range(&work);
 
-		if (!opt_quiet && loopcnt > 1 && (time(NULL) - tm_rate_log) > opt_maxlograte)
+		if (thr_id==0 && !opt_quiet && loopcnt > 1 && (time(NULL) - tm_rate_log) > opt_maxlograte)
 		{
 				format_hashrate(thr_hashrates[thr_id], s);
 				char output[4096];

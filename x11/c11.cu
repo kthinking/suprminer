@@ -222,7 +222,7 @@ extern "C" int scanhash_c11(int thr_id, struct work* work, uint32_t max_nonce, u
 	uint32_t endiandata[20];
 	for (int k=0; k < 20; k++)
 		be32enc(&endiandata[k], pdata[k]);
-
+	cudaDeviceSynchronize();
 	quark_blake512_cpu_setBlock_80(thr_id, endiandata);
 //	if (use_compat_kernels[thr_id])
 //		cuda_check_cpu_setTarget(ptarget);
@@ -285,6 +285,7 @@ extern "C" int scanhash_c11(int thr_id, struct work* work, uint32_t max_nonce, u
 				} else {
 					pdata[19] = work->nonces[0] + 1; // cursor
 				}
+				cudaDeviceSynchronize();
 				return work->valid_nonces;
 			}
 			else if (vhash[7] > Htarg) {
@@ -305,6 +306,7 @@ extern "C" int scanhash_c11(int thr_id, struct work* work, uint32_t max_nonce, u
 		pdata[19] += throughput;
 
 	} while (!work_restart[thr_id].restart);
+	cudaDeviceSynchronize();
 
 	*hashes_done = pdata[19] - first_nonce;
 	return 0;
