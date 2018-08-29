@@ -796,11 +796,10 @@ int share_result(int result, int pooln, double sharediff, const char *reason)
 		sprintf(solved, " solved: %u", p->solved_count);
 	}
 
-
-	applog(LOG_NOTICE, "accepted: %lu/%lu (%s), %s %s%s",
+	applog(LOG_NOTICE, "accepted: %lu/%lu (%s), %s %s%s%s,%ums",
 			p->accepted_count,
 			p->accepted_count + p->rejected_count,
-			suppl, s, flag, solved);
+			suppl, s, flag, solved, CL_SIL,stratum.answer_msec);
 
 	//applog(LOG_NOTICE, "[B/A/T]: %lu/%lu/%lu, diff: %2.3f, %s %s", p->solved_count, p->accepted_count, p->accepted_count + p->rejected_count, sharediff, s, flag);
 
