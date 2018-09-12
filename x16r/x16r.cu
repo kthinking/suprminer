@@ -55,6 +55,7 @@ extern void x16_simd_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t
 extern void x16_simd_whirlpool512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x13_hamsi512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 extern void x16_simd_jh512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x15_whirlpool_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 
 
 extern void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
@@ -293,8 +294,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		((uint32_t*)ptarget)[7] = 0x00f;
 		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 		//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0xcccccccc;
-		((uint32_t*)pdata)[2] = 0xcccccccc;
+		((uint32_t*)pdata)[1] = 0xeeeeeeee;
+		((uint32_t*)pdata)[2] = 0xeeeeeeee;
 
 		//		94E3A654 CBD9B14B
 
@@ -817,7 +818,17 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				break;
 			case WHIRLPOOL:
-				x15_whirlpool_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				if (i == 15)
+				{
+					x15_whirlpool_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
+					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+					work->nonces[0] = h_resNonce[thr_id][0];
+					addstart = true;
+				}
+				else
+				{
+					x15_whirlpool_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+				}
 				break;
 			case SHA512:
 				if (i == 15)
