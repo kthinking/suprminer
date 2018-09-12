@@ -410,7 +410,6 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			x11_simd512_cpu_init(thr_id, (throughput));
 		}
 		x13_hamsi512_cpu_init(thr_id, throughput);
-		x16_echo512_cuda_init(thr_id, throughput);
 		x16_fugue512_cpu_init(thr_id, throughput);
 		x15_whirlpool_cpu_init(thr_id, throughput, 0);
 		x16_whirlpool512_init(thr_id, throughput);

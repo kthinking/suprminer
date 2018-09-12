@@ -2471,10 +2471,10 @@ static void *miner_thread(void *userdata)
         case ALGO_X16S:
             rc = scanhash_x16s(thr_id, &work, max_nonce, &hashes_done);
 			break;
-/*		case ALGO_X17:
+		case ALGO_X17:
 			rc = scanhash_x17(thr_id, &work, max_nonce, &hashes_done);
 			break;
-		case ALGO_ZR5:
+/*		case ALGO_ZR5:
 			rc = scanhash_zr5(thr_id, &work, max_nonce, &hashes_done);
 			break;
 */
