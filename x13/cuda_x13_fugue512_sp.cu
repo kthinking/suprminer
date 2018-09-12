@@ -39,6 +39,7 @@
  *
  * @author   phm <phm@inbox.com>
  * @author   Provos Alexis (Applied partial shared Mem utilization under CUDA 7.5 for compute5.0/5.2 / 2016)
+ * @author   SP (Replaced the Alexis partial shared Mem utilization with 100% bankconflict free sharedmem utilization)
  */
 
 static __constant__ const uint32_t c_S[16] = {
