@@ -601,8 +601,34 @@ __device__ __inline__ uint2 ROR24(const uint2 a)
 	result.y = __byte_perm(a.y, a.x, 0x6543);
 	return result;
 }
+__device__ __forceinline__
+uint2 ROL16(const uint2 a){
+	uint2 result;
+	result.x = __byte_perm(a.x, a.y, 0x1076);
+	result.y = __byte_perm(a.y, a.x, 0x1076);
+
+	return result;
+}
+
+__device__ __forceinline__
+uint2 ROL24(const uint2 a){
+	uint2 result;
+	result.x = __byte_perm(a.x, a.y, 0x0765);
+	result.y = __byte_perm(a.y, a.x, 0x0765);
+	return result;
+}
+__device__ __forceinline__
+uint2 ROR8(const uint2 a){
+	uint2 result;
+	result.x = __byte_perm(a.x, a.y, 0x4321);
+	result.y = __byte_perm(a.y, a.x, 0x4321);
+	return result;
+}
 #else
+#define ROR8(u)  ROR2(u, 8)
 #define ROL8(u)  ROL2(u, 8)
+#define ROL16(u) ROL2(u,16)
+#define ROL24(u) ROL2(u,24)
 #define ROR16(u) ROR2(u,16)
 #define ROR24(u) ROR2(u,24)
 #endif
