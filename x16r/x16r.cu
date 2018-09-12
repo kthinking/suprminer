@@ -293,8 +293,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		((uint32_t*)ptarget)[7] = 0x00f;
 		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 		//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0xdddddddd;
-		((uint32_t*)pdata)[2] = 0xdddddddd;
+		((uint32_t*)pdata)[1] = 0xcccccccc;
+		((uint32_t*)pdata)[2] = 0xcccccccc;
 
 		//		94E3A654 CBD9B14B
 
@@ -923,7 +923,6 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			}
 		pdata[19] += throughput;
 		} while (!work_restart[thr_id].restart && ((uint64_t)max_nonce > (uint64_t)throughput + pdata[19]));
-
 		cudaDeviceSynchronize();
 	*hashes_done = pdata[19] - first_nonce;
 	return 0;

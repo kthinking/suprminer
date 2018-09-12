@@ -93,86 +93,116 @@ static __device__ uint32_t mixtab0[256] = {
 	}
 
 __device__ __forceinline__
-static void SMIX(const uint32_t shared[4][256], uint32_t &x0,uint32_t &x1,uint32_t &x2,uint32_t &x3){
-	uint32_t c0 = mixtab0(__byte_perm(x0,0,0x4443));
-	uint32_t r1 = mixtab1(__byte_perm(x0,0,0x4442));
-	uint32_t r2 = mixtab2(__byte_perm(x0,0,0x4441));
-	uint32_t r3 = mixtab3(__byte_perm(x0,0,0x4440));
-	c0 = c0 ^ r1 ^ r2 ^ r3;
-	uint32_t r0 = mixtab0(__byte_perm(x1,0,0x4443));
-	uint32_t c1 = r0 ^ mixtab1(__byte_perm(x1,0,0x4442));
-	uint32_t tmp = mixtab2(__byte_perm(x1,0,0x4441));
-	c1 ^= tmp;
-	r2 ^= tmp;
-	tmp = mixtab3(__byte_perm(x1,0,0x4440));
-	c1 ^= tmp;
-	r3 ^= tmp;
-	uint32_t c2 = mixtab0(__byte_perm(x2,0,0x4443));
-	r0 ^= c2;
-	tmp = mixtab1(__byte_perm(x2,0,0x4442));
-	c2 ^= tmp;
-	r1 ^= tmp;
-	tmp = mixtab2(__byte_perm(x2,0,0x4441));
-	c2 ^= tmp;
-	tmp = mixtab3(__byte_perm(x2,0,0x4440));
-	c2 ^= tmp;
-	r3 ^= tmp;
-	uint32_t c3 = mixtab0(__byte_perm(x3,0,0x4443));
-	r0 ^= c3;
-	tmp = mixtab1(__byte_perm(x3,0,0x4442));
-	c3 ^= tmp;
-	r1 ^= tmp;
-	tmp = mixtab2(__byte_perm(x3,0,0x4441));
-	c3 ^= tmp;
-	r2 ^= tmp;
-	tmp = mixtab3(__byte_perm(x3,0,0x4440));
-	c3 ^= tmp;
-	x0 = ((c0 ^ (r0 << 0)) & 0xFF000000) | ((c1 ^ (r1 << 0)) & 0x00FF0000) | ((c2 ^ (r2 << 0)) & 0x0000FF00) | ((c3 ^ (r3 << 0)) & 0x000000FF);
-	x1 = ((c1 ^ (r0 << 8)) & 0xFF000000) | ((c2 ^ (r1 << 8)) & 0x00FF0000) | ((c3 ^ (r2 << 8)) & 0x0000FF00) | ((c0 ^ (r3 >>24)) & 0x000000FF);
-	x2 = ((c2 ^ (r0 <<16)) & 0xFF000000) | ((c3 ^ (r1 <<16)) & 0x00FF0000) | ((c0 ^ (r2 >>16)) & 0x0000FF00) | ((c1 ^ (r3 >>16)) & 0x000000FF);
-	x3 = ((c3 ^ (r0 <<24)) & 0xFF000000) | ((c0 ^ (r1 >> 8)) & 0x00FF0000) | ((c1 ^ (r2 >> 8)) & 0x0000FF00) | ((c2 ^ (r3 >> 8)) & 0x000000FF);
+void fugue_gpu_init256_32(uint32_t sharedMemory[1024 * 8])
+{
+	/* each thread startup will fill a uint32 */
+	const uint32_t thread = threadIdx.x << 5;
+	uint32_t temp = __ldg(&mixtab0[threadIdx.x]);
+	//	const uint32_t thr = threadIdx.x & 0xFF;
+	//	const uint32_t temp = tex1Dfetch(mixTab0Tex, thr);
+
+	sharedMemory[thread] = temp;
+	sharedMemory[1 + thread] = temp;
+	sharedMemory[2 + thread] = temp;
+	sharedMemory[3 + thread] = temp;
+	sharedMemory[4 + thread] = temp;
+	sharedMemory[5 + thread] = temp;
+	sharedMemory[6 + thread] = temp;
+	sharedMemory[7 + thread] = temp;
+	sharedMemory[8 + thread] = temp;
+	sharedMemory[9 + thread] = temp;
+	sharedMemory[10 + thread] = temp;
+	sharedMemory[11 + thread] = temp;
+	sharedMemory[12 + thread] = temp;
+	sharedMemory[13 + thread] = temp;
+	sharedMemory[14 + thread] = temp;
+	sharedMemory[15 + thread] = temp;
+	sharedMemory[16 + thread] = temp;
+	sharedMemory[17 + thread] = temp;
+	sharedMemory[18 + thread] = temp;
+	sharedMemory[19 + thread] = temp;
+	sharedMemory[20 + thread] = temp;
+	sharedMemory[21 + thread] = temp;
+	sharedMemory[22 + thread] = temp;
+	sharedMemory[23 + thread] = temp;
+	sharedMemory[24 + thread] = temp;
+	sharedMemory[25 + thread] = temp;
+	sharedMemory[26 + thread] = temp;
+	sharedMemory[27 + thread] = temp;
+	sharedMemory[28 + thread] = temp;
+	sharedMemory[29 + thread] = temp;
+	sharedMemory[30 + thread] = temp;
+	sharedMemory[31 + thread] = temp;
+}
+__device__ __forceinline__ uint32_t xorand(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x28;" : "+r"(a) : "r"(b), "r"(c));	// 0x28 = (F0 ^ CC) & AA
+	return a;
+}
+__device__ __forceinline__ uint32_t or3(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0xFE;" : "+r"(a) : "r"(b), "r"(c));	// 0x28 = (F0 | CC) | AA
+	return a;
 }
 
-__device__
-static void SMIX_LDG(const uint32_t shared[4][256], uint32_t &x0,uint32_t &x1,uint32_t &x2,uint32_t &x3){
-	uint32_t c0 = __ldg(&mixtab0[__byte_perm(x0,0,0x4443)]);
-	uint32_t r1 = mixtab1(__byte_perm(x0,0,0x4442));
-	uint32_t r2 = mixtab2(__byte_perm(x0,0,0x4441));
-	uint32_t r3 = mixtab3(__byte_perm(x0,0,0x4440));
-	c0 = c0 ^ r1 ^ r2 ^ r3;
-	uint32_t r0 = __ldg(&mixtab0[__byte_perm(x1,0,0x4443)]);
-	uint32_t c1 = r0 ^ mixtab1(__byte_perm(x1,0,0x4442));
-	uint32_t tmp = mixtab2(__byte_perm(x1,0,0x4441));
+#define spmixtab0(x) shared[(x)]
+#define spmixtab1(x) ROR8(shared[(x)])
+#define spmixtab2(x) ROL16(shared[(x)])
+#define spmixtab3(x) ROL8(shared[(x)])
+
+__device__ __forceinline__ void SMIX2(const uint32_t shared[8 * 1024], uint32_t &x0, uint32_t &x1, uint32_t &x2, uint32_t &x3)
+{
+	uint32_t tmp;
+	uint32_t c0 = spmixtab0((threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4443) << 5)));
+	tmp = spmixtab1((threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4442) << 5)));
+	c0 ^= tmp;
+	uint32_t r1 = tmp;
+	tmp = spmixtab2((threadIdx.x & 31) + ((__byte_perm(x0, 0, 0x4441) << 5)));
+	c0 ^= tmp;
+	uint32_t r2 = tmp;
+	tmp = spmixtab3((threadIdx.x & 31) + ((x0 & 0xff) << 5));
+	c0 ^= tmp;
+	uint32_t r3 = tmp;
+	tmp = spmixtab0((threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4443) << 5)));
+	uint32_t c1 = tmp;
+	uint32_t r0 = tmp;
+	tmp = spmixtab1((threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4442) << 5)));
+	c1 ^= tmp;
+	tmp = spmixtab2((threadIdx.x & 31) + ((__byte_perm(x1, 0, 0x4441) << 5)));
 	c1 ^= tmp;
 	r2 ^= tmp;
-	tmp = mixtab3(__byte_perm(x1,0,0x4440));
+	tmp = spmixtab3((threadIdx.x & 31) + ((x1 & 0xff) << 5));
 	c1 ^= tmp;
 	r3 ^= tmp;
-	uint32_t c2 = __ldg(&mixtab0[__byte_perm(x2,0,0x4443)]);
-	r0 ^= c2;
-	tmp = mixtab1(__byte_perm(x2,0,0x4442));
+	tmp = spmixtab0((threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4443) << 5)));
+	uint32_t c2 = tmp;
+	r0 ^= tmp;
+	tmp = spmixtab1((threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4442) << 5)));
 	c2 ^= tmp;
 	r1 ^= tmp;
-	tmp = mixtab2(__byte_perm(x2,0,0x4441));
+	tmp = spmixtab2((threadIdx.x & 31) + ((__byte_perm(x2, 0, 0x4441) << 5)));
 	c2 ^= tmp;
-	tmp = mixtab3(__byte_perm(x2,0,0x4440));
+	tmp = spmixtab3((threadIdx.x & 31) + ((x2 & 0xff) << 5));
 	c2 ^= tmp;
 	r3 ^= tmp;
-	uint32_t c3 = __ldg(&mixtab0[__byte_perm(x3,0,0x4443)]);
-	r0 ^= c3;
-	tmp = mixtab1(__byte_perm(x3,0,0x4442));
+	tmp = spmixtab0((threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4443) << 5)));
+	uint32_t c3 = tmp;
+	r0 ^= tmp;
+	tmp = spmixtab1((threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4442) << 5)));
 	c3 ^= tmp;
 	r1 ^= tmp;
-	tmp = mixtab2(__byte_perm(x3,0,0x4441));
+	tmp = spmixtab2((threadIdx.x & 31) + ((__byte_perm(x3, 0, 0x4441) << 5)));
 	c3 ^= tmp;
 	r2 ^= tmp;
-	tmp = ROL8(__ldg(&mixtab0[__byte_perm(x3,0,0x4440)]));
+	tmp = spmixtab3((threadIdx.x & 31) + ((x3 & 0xff) << 5));
 	c3 ^= tmp;
-	x0 = ((c0 ^ (r0 << 0)) & 0xFF000000) | ((c1 ^ (r1 << 0)) & 0x00FF0000) | ((c2 ^ (r2 << 0)) & 0x0000FF00) | ((c3 ^ (r3 << 0)) & 0x000000FF);
-	x1 = ((c1 ^ (r0 << 8)) & 0xFF000000) | ((c2 ^ (r1 << 8)) & 0x00FF0000) | ((c3 ^ (r2 << 8)) & 0x0000FF00) | ((c0 ^ (r3 >>24)) & 0x000000FF);
-	x2 = ((c2 ^ (r0 <<16)) & 0xFF000000) | ((c3 ^ (r1 <<16)) & 0x00FF0000) | ((c0 ^ (r2 >>16)) & 0x0000FF00) | ((c1 ^ (r3 >>16)) & 0x000000FF);
-	x3 = ((c3 ^ (r0 <<24)) & 0xFF000000) | ((c0 ^ (r1 >> 8)) & 0x00FF0000) | ((c1 ^ (r2 >> 8)) & 0x0000FF00) | ((c2 ^ (r3 >> 8)) & 0x000000FF);
+	x0 = or3(xorand(c0, r0, 0xFF000000), xorand(c1, r1, 0x00FF0000), xorand(c2, r2, 0x0000FF00)) | xorand(c3, r3, 0x000000FF);
+	x1 = or3(xorand(c1, (r0 << 8), 0xFF000000), xorand(c2, (r1 << 8), 0x00FF0000), xorand(c3, (r2 << 8), 0x0000FF00)) | xorand(c0, (r3 >> 24), 0x000000FF);
+	x2 = or3(xorand(c2, (r0 << 16), 0xFF000000), xorand(c3, (r1 << 16), 0x00FF0000), xorand(c0, (r2 >> 16), 0x0000FF00)) | xorand(c1, (r3 >> 16), 0x000000FF);
+	x3 = or3(xorand(c3, (r0 << 24), 0xFF000000), xorand(c0, (r1 >> 8), 0x00FF0000), xorand(c1, (r2 >> 8), 0x0000FF00)) | xorand(c2, (r3 >> 8), 0x000000FF);
 }
+
+
 #define mROR3 { \
 	B[ 6] = S[33], B[ 7] = S[34], B[ 8] = S[35]; \
 	S[35] = S[32]; S[34] = S[31]; S[33] = S[30]; S[32] = S[29]; S[31] = S[28]; S[30] = S[27]; S[29] = S[26]; S[28] = S[25]; S[27] = S[24]; \
@@ -197,54 +227,49 @@ static void SMIX_LDG(const uint32_t shared[4][256], uint32_t &x0,uint32_t &x1,ui
 	S[ 8] = B[ 8]; S[ 7] = B[ 7]; S[ 6] = B[ 6]; S[ 5] = B[ 5]; S[ 4] = B[ 4]; S[ 3] = B[ 3]; S[ 2] = B[ 2]; S[ 1] = B[ 1]; S[ 0] = B[ 0]; \
 	}
 
-#define FUGUE512_3(x, y, z) {  \
+#define FUGUE512_SP(x, y, z) {  \
         TIX4(x, S[ 0], S[ 1], S[ 4], S[ 7], S[ 8], S[22], S[24], S[27], S[30]); \
         CMIX36(S[33], S[34], S[35], S[ 1], S[ 2], S[ 3], S[15], S[16], S[17]); \
-        SMIX_LDG(shared, S[33], S[34], S[35], S[ 0]); \
+        SMIX2(shared, S[33], S[34], S[35], S[ 0]); \
         CMIX36(S[30], S[31], S[32], S[34], S[35], S[ 0], S[12], S[13], S[14]); \
-        SMIX_LDG(shared, S[30], S[31], S[32], S[33]); \
+        SMIX2(shared, S[30], S[31], S[32], S[33]); \
         CMIX36(S[27], S[28], S[29], S[31], S[32], S[33], S[ 9], S[10], S[11]); \
-        SMIX(shared, S[27], S[28], S[29], S[30]); \
+        SMIX2(shared, S[27], S[28], S[29], S[30]); \
         CMIX36(S[24], S[25], S[26], S[28], S[29], S[30], S[ 6], S[ 7], S[ 8]); \
-        SMIX_LDG(shared, S[24], S[25], S[26], S[27]); \
+        SMIX2(shared, S[24], S[25], S[26], S[27]); \
         \
         TIX4(y, S[24], S[25], S[28], S[31], S[32], S[10], S[12], S[15], S[18]); \
         CMIX36(S[21], S[22], S[23], S[25], S[26], S[27], S[ 3], S[ 4], S[ 5]); \
-        SMIX(shared, S[21], S[22], S[23], S[24]); \
+        SMIX2(shared, S[21], S[22], S[23], S[24]); \
         CMIX36(S[18], S[19], S[20], S[22], S[23], S[24], S[ 0], S[ 1], S[ 2]); \
-        SMIX_LDG(shared, S[18], S[19], S[20], S[21]); \
+        SMIX2(shared, S[18], S[19], S[20], S[21]); \
         CMIX36(S[15], S[16], S[17], S[19], S[20], S[21], S[33], S[34], S[35]); \
-        SMIX_LDG(shared, S[15], S[16], S[17], S[18]); \
+        SMIX2(shared, S[15], S[16], S[17], S[18]); \
         CMIX36(S[12], S[13], S[14], S[16], S[17], S[18], S[30], S[31], S[32]); \
-        SMIX(shared, S[12], S[13], S[14], S[15]); \
+        SMIX2(shared, S[12], S[13], S[14], S[15]); \
         \
         TIX4(z, S[12], S[13], S[16], S[19], S[20], S[34], S[ 0], S[ 3], S[ 6]); \
         CMIX36(S[ 9], S[10], S[11], S[13], S[14], S[15], S[27], S[28], S[29]); \
-        SMIX_LDG(shared, S[ 9], S[10], S[11], S[12]); \
+        SMIX2(shared, S[ 9], S[10], S[11], S[12]); \
         CMIX36(S[ 6], S[ 7], S[ 8], S[10], S[11], S[12], S[24], S[25], S[26]); \
-        SMIX_LDG(shared, S[ 6], S[ 7], S[ 8], S[ 9]); \
+        SMIX2(shared, S[ 6], S[ 7], S[ 8], S[ 9]); \
         CMIX36(S[ 3], S[ 4], S[ 5], S[ 7], S[ 8], S[ 9], S[21], S[22], S[23]); \
-        SMIX_LDG(shared, S[ 3], S[ 4], S[ 5], S[ 6]); \
+        SMIX2(shared, S[ 3], S[ 4], S[ 5], S[ 6]); \
         CMIX36(S[ 0], S[ 1], S[ 2], S[ 4], S[ 5], S[ 6], S[18], S[19], S[20]); \
-        SMIX_LDG(shared, S[ 0], S[ 1], S[ 2], S[ 3]); \
+        SMIX2(shared, S[ 0], S[ 1], S[ 2], S[ 3]); \
 	}
 
-/***************************************************/
-// Die Hash-Funktion
-__global__ __launch_bounds__(256,3)
+
+__global__
+__launch_bounds__(384, 3)
 void x13_fugue512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 {
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 
-	__shared__ uint32_t shared[4][256];
+	__shared__ uint32_t shared[8 * 1024];
 
-	//	if (threadIdx.x<256){
-	const uint32_t tmp = mixtab0[threadIdx.x];
-	shared[0][threadIdx.x] = tmp;
-	shared[1][threadIdx.x] = ROR8(tmp);
-	shared[2][threadIdx.x] = ROL16(tmp);
-	shared[3][threadIdx.x] = ROL8(tmp);
-	//	}
+	if (threadIdx.x < 256) fugue_gpu_init256_32(shared);
+
 	if (thread < threads)
 	{
 
@@ -259,7 +284,6 @@ void x13_fugue512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 			h[i] = cuda_swab32(h[i]);
 		}
 
-		__syncthreads();
 
 		//		*(uint2x4*)&Hash[ 0] = *(uint2x4*)&h[ 0];
 		//		*(uint2x4*)&Hash[ 8] = *(uint2x4*)&h[ 8];
@@ -269,39 +293,41 @@ void x13_fugue512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 		S[0] = S[1] = S[2] = S[3] = S[4] = S[5] = S[6] = S[7] = S[8] = S[9] = S[10] = S[11] = S[12] = S[13] = S[14] = S[15] = S[16] = S[17] = S[18] = S[19] = 0;
 		*(uint2x4*)&S[20] = *(uint2x4*)&c_S[0];
 #pragma unroll 8
-		for (int i = 0; i<8; i++){
+		for (int i = 0; i < 8; i++){
 			S[28 + i] = c_S[i + 8];
 		}
+		__syncthreads();
 
-		FUGUE512_3(h[0x0], h[0x1], h[0x2]);
-		FUGUE512_3(h[0x3], h[0x4], h[0x5]);
-		FUGUE512_3(h[0x6], h[0x7], h[0x8]);
-		FUGUE512_3(h[0x9], h[0xA], h[0xB]);
-		FUGUE512_3(h[0xC], h[0xD], h[0xE]);
-		FUGUE512_3(h[0xF], 0U, 512U);
+		FUGUE512_SP(h[0x0], h[0x1], h[0x2]);
+		FUGUE512_SP(h[0x3], h[0x4], h[0x5]);
+		FUGUE512_SP(h[0x6], h[0x7], h[0x8]);
+		FUGUE512_SP(h[0x9], h[0xA], h[0xB]);
+		FUGUE512_SP(h[0xC], h[0xD], h[0xE]);
+		FUGUE512_SP(h[0xF], 0U, 512U);
 
 		for (uint32_t i = 0; i < 32; i += 2){
 			mROR3;
 			CMIX36(S[0], S[1], S[2], S[4], S[5], S[6], S[18], S[19], S[20]);
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			mROR3;
 			CMIX36(S[0], S[1], S[2], S[4], S[5], S[6], S[18], S[19], S[20]);
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 		}
-#pragma unroll 10
-		for (uint32_t i = 0; i < 13; i++) {
+
+		for (uint32_t i = 0; i < 13; i++)
+		{
 			S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 			mROR9;
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			S[4] ^= S[0];	S[10] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 			mROR9;
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[27] ^= S[0];
 			mROR9;
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[28] ^= S[0];
 			mROR8;
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 		}
 		S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 
@@ -316,20 +342,15 @@ void x13_fugue512_gpu_hash_64_sp(uint32_t threads, uint32_t *g_hash)
 }
 
 __global__
-__launch_bounds__(256, 3)
+__launch_bounds__(384, 3)
 void x13_fugue512_gpu_hash_64_final_sp(uint32_t threads, uint32_t *g_hash, uint32_t* resNonce, const uint64_t target)
 {
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	__shared__ uint32_t shared[8 * 1024];
 
-	__shared__ uint32_t shared[4][256];
+	if (threadIdx.x < 256) fugue_gpu_init256_32(shared);
 
-	if (threadIdx.x<256){
-		const uint32_t tmp = mixtab0[threadIdx.x];
-		shared[0][threadIdx.x] = tmp;
-		shared[1][threadIdx.x] = ROR8(tmp);
-		shared[2][threadIdx.x] = ROL16(tmp);
-		shared[3][threadIdx.x] = ROL8(tmp);
-	}
+
 	if (thread < threads)
 	{
 
@@ -343,87 +364,57 @@ void x13_fugue512_gpu_hash_64_final_sp(uint32_t threads, uint32_t *g_hash, uint3
 		{
 			h[i] = cuda_swab32(h[i]);
 		}
-
-		//		__syncthreads();
-
-		//		*(uint2x4*)&Hash[ 0] = *(uint2x4*)&h[ 0];
-		//		*(uint2x4*)&Hash[ 8] = *(uint2x4*)&h[ 8];
 		uint32_t S[36];
 		uint32_t B[9];
 
 		S[0] = S[1] = S[2] = S[3] = S[4] = S[5] = S[6] = S[7] = S[8] = S[9] = S[10] = S[11] = S[12] = S[13] = S[14] = S[15] = S[16] = S[17] = S[18] = S[19] = 0;
 		*(uint2x4*)&S[20] = *(uint2x4*)&c_S[0];
 #pragma unroll 8
-		for (int i = 0; i<8; i++){
+		for (int i = 0; i < 8; i++){
 			S[28 + i] = c_S[i + 8];
 		}
+		__syncthreads();
 
-		FUGUE512_3(h[0x0], h[0x1], h[0x2]);
-		FUGUE512_3(h[0x3], h[0x4], h[0x5]);
-		FUGUE512_3(h[0x6], h[0x7], h[0x8]);
-		FUGUE512_3(h[0x9], h[0xA], h[0xB]);
-		FUGUE512_3(h[0xC], h[0xD], h[0xE]);
-		FUGUE512_3(h[0xF], 0U, 512U);
+		FUGUE512_SP(h[0x0], h[0x1], h[0x2]);
+		FUGUE512_SP(h[0x3], h[0x4], h[0x5]);
+		FUGUE512_SP(h[0x6], h[0x7], h[0x8]);
+		FUGUE512_SP(h[0x9], h[0xA], h[0xB]);
+		FUGUE512_SP(h[0xC], h[0xD], h[0xE]);
+		FUGUE512_SP(h[0xF], 0U, 512U);
 
 		for (uint32_t i = 0; i < 32; i += 2){
 			mROR3;
 			CMIX36(S[0], S[1], S[2], S[4], S[5], S[6], S[18], S[19], S[20]);
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			mROR3;
 			CMIX36(S[0], S[1], S[2], S[4], S[5], S[6], S[18], S[19], S[20]);
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 		}
 
-		/*#pragma unroll 11
-		for (uint32_t i = 0; i < 13; i++) {
-		S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
-		mROR9;
-		SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
-		S[4] ^= S[0];	S[10] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
-		mROR9;
-		SMIX(shared, S[0], S[1], S[2], S[3]);
-		S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[27] ^= S[0];
-		mROR9;
-		SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
-		S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[28] ^= S[0];
-		mROR8;
-		SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
-		}
-		S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
-
-		S[0] = cuda_swab32(S[1]);	S[1] = cuda_swab32(S[2]);	S[2] = cuda_swab32(S[3]);	S[3] = cuda_swab32(S[4]);
-		S[4] = cuda_swab32(S[9]);	S[5] = cuda_swab32(S[10]);	S[6] = cuda_swab32(S[11]);	S[7] = cuda_swab32(S[12]);
-		S[8] = cuda_swab32(S[18]);	S[9] = cuda_swab32(S[19]);	S[10] = cuda_swab32(S[20]);	S[11] = cuda_swab32(S[21]);
-		S[12] = cuda_swab32(S[27]);	S[13] = cuda_swab32(S[28]);	S[14] = cuda_swab32(S[29]);	S[15] = cuda_swab32(S[30]);
-
-		*(uint2x4*)&Hash[0] = *(uint2x4*)&S[0];
-		*(uint2x4*)&Hash[8] = *(uint2x4*)&S[8];
-		*/
-
-		//#pragma unroll 10
-		for (int i = 0; i < 12; i++) {
+		for (int i = 0; i < 12; i++)
+		{
 			S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 			mROR9;
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			S[4] ^= S[0];	S[10] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 			mROR9;
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[27] ^= S[0];
 			mROR9;
-			SMIX(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 			S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[28] ^= S[0];
 			mROR8;
-			SMIX_LDG(shared, S[0], S[1], S[2], S[3]);
+			SMIX2(shared, S[0], S[1], S[2], S[3]);
 		}
 		S[4] ^= S[0];	S[9] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 		mROR9;
-		SMIX(shared, S[0], S[1], S[2], S[3]);
+		SMIX2(shared, S[0], S[1], S[2], S[3]);
 		S[4] ^= S[0];	S[10] ^= S[0];	S[18] ^= S[0];	S[27] ^= S[0];
 		mROR9;
-		SMIX(shared, S[0], S[1], S[2], S[3]);
+		SMIX2(shared, S[0], S[1], S[2], S[3]);
 		S[4] ^= S[0];	S[10] ^= S[0];	S[19] ^= S[0];	S[27] ^= S[0];
 		mROR9;
-		SMIX(shared, S[0], S[1], S[2], S[3]);
+		SMIX2(shared, S[0], S[1], S[2], S[3]);
 
 		S[3] = cuda_swab32(S[3]);	S[4] = cuda_swab32(S[4] ^ S[0]);
 
@@ -440,7 +431,7 @@ void x13_fugue512_gpu_hash_64_final_sp(uint32_t threads, uint32_t *g_hash, uint3
 __host__
 void x13_fugue512_cpu_hash_64_sp(int thr_id, uint32_t threads, uint32_t *d_hash){
 
-	const uint32_t threadsperblock = 256;
+	const uint32_t threadsperblock = 384;
 
 	// berechne wie viele Thread Blocks wir brauchen
 	dim3 grid((threads + threadsperblock-1)/threadsperblock);
@@ -452,7 +443,7 @@ void x13_fugue512_cpu_hash_64_sp(int thr_id, uint32_t threads, uint32_t *d_hash)
 __host__
 void x13_fugue512_cpu_hash_64_final_sp(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target)
 {
-	const uint32_t threadsperblock = 256;
+	const uint32_t threadsperblock = 384;
 
 	// berechne wie viele Thread Blocks wir brauchen
 	dim3 grid((threads + threadsperblock-1)/threadsperblock);
