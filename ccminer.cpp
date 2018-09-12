@@ -239,6 +239,7 @@ Options:\n\
 			c11/flax    X11 variant\n\
 			x16r        X16R (Raven)\n\
 			x16s	    X16S (Pidgeon)\n\
+			x17			X17 (Verge)\n\
   -d, --devices         Comma separated list of CUDA devices to use.\n\
                         Device IDs start counting from 0! Alternatively takes\n\
                         string names of your cards like gtx780ti or gt640#2\n\
