@@ -294,8 +294,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		((uint32_t*)ptarget)[7] = 0x00f;
 		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 		//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0xeeeeeeee;
-		((uint32_t*)pdata)[2] = 0xeeeeeeee;
+		((uint32_t*)pdata)[1] = 0x88888888;
+		((uint32_t*)pdata)[2] = 0x88888888;
 
 		//		94E3A654 CBD9B14B
 
