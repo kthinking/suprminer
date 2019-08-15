@@ -1,30 +1,36 @@
 /*
- * Quick Hamsi-512 for X13
- * by tsiv - 2014
- *
- * Provos Alexis - 2016
- */
+* Quick Hamsi-512 for X13
+* by tsiv - 2014
+*
+* Provos Alexis - 2016
+* sp - 2018
+*/
 
 #include "miner.h"
 #include "cuda_helper_alexis.h"
 #include "cuda_vectors_alexis.h"
 
-static __constant__ const uint32_t d_alpha_n[] = {
-	0xff00f0f0, 0xccccaaaa, 0xf0f0cccc, 0xff00aaaa, 0xccccaaaa, 0xf0f0ff00, 0xaaaacccc, 0xf0f0ff00,	0xf0f0cccc, 0xaaaaff00, 0xccccff00, 0xaaaaf0f0, 0xaaaaf0f0, 0xff00cccc, 0xccccf0f0, 0xff00aaaa,
-	0xccccaaaa, 0xff00f0f0, 0xff00aaaa, 0xf0f0cccc, 0xf0f0ff00, 0xccccaaaa, 0xf0f0ff00, 0xaaaacccc,	0xaaaaff00, 0xf0f0cccc, 0xaaaaf0f0, 0xccccff00, 0xff00cccc, 0xaaaaf0f0, 0xff00aaaa, 0xccccf0f0
+__constant__ static uint64_t c_PaddedMessage80[10];
+
+//#define ROTL32C(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
+
+
+__constant__  uint32_t d_alpha_n[] = {
+	0xff00f0f0, 0xccccaaaa, 0xf0f0cccc, 0xff00aaaa, 0xccccaaaa, 0xf0f0ff00, 0xaaaacccc, 0xf0f0ff00, 0xf0f0cccc, 0xaaaaff00, 0xccccff00, 0xaaaaf0f0, 0xaaaaf0f0, 0xff00cccc, 0xccccf0f0, 0xff00aaaa,
+	0xccccaaaa, 0xff00f0f0, 0xff00aaaa, 0xf0f0cccc, 0xf0f0ff00, 0xccccaaaa, 0xf0f0ff00, 0xaaaacccc, 0xaaaaff00, 0xf0f0cccc, 0xaaaaf0f0, 0xccccff00, 0xff00cccc, 0xaaaaf0f0, 0xff00aaaa, 0xccccf0f0
 };
 
-static __constant__ const uint32_t d_alpha_f[] = {
-	0xcaf9639c, 0x0ff0f9c0, 0x639c0ff0, 0xcaf9f9c0, 0x0ff0f9c0, 0x639ccaf9, 0xf9c00ff0, 0x639ccaf9,	0x639c0ff0, 0xf9c0caf9, 0x0ff0caf9, 0xf9c0639c, 0xf9c0639c, 0xcaf90ff0, 0x0ff0639c, 0xcaf9f9c0,
-	0x0ff0f9c0, 0xcaf9639c, 0xcaf9f9c0, 0x639c0ff0, 0x639ccaf9, 0x0ff0f9c0, 0x639ccaf9, 0xf9c00ff0,	0xf9c0caf9, 0x639c0ff0, 0xf9c0639c, 0x0ff0caf9, 0xcaf90ff0, 0xf9c0639c, 0xcaf9f9c0, 0x0ff0639c
+__constant__  uint32_t d_alpha_f[] = {
+	0xcaf9639c, 0x0ff0f9c0, 0x639c0ff0, 0xcaf9f9c0, 0x0ff0f9c0, 0x639ccaf9, 0xf9c00ff0, 0x639ccaf9, 0x639c0ff0, 0xf9c0caf9, 0x0ff0caf9, 0xf9c0639c, 0xf9c0639c, 0xcaf90ff0, 0x0ff0639c, 0xcaf9f9c0,
+	0x0ff0f9c0, 0xcaf9639c, 0xcaf9f9c0, 0x639c0ff0, 0x639ccaf9, 0x0ff0f9c0, 0x639ccaf9, 0xf9c00ff0, 0xf9c0caf9, 0x639c0ff0, 0xf9c0639c, 0x0ff0caf9, 0xcaf90ff0, 0xf9c0639c, 0xcaf9f9c0, 0x0ff0639c
 };
 
-static __constant__ const uint32_t c_c[] = {
-		0x73746565, 0x6c706172, 0x6b204172, 0x656e6265, 0x72672031, 0x302c2062, 0x75732032, 0x3434362c,
-		0x20422d33, 0x30303120, 0x4c657576, 0x656e2d48, 0x65766572, 0x6c65652c, 0x2042656c, 0x6769756d
+__constant__  uint32_t c_c[] = {
+	0x73746565, 0x6c706172, 0x6b204172, 0x656e6265, 0x72672031, 0x302c2062, 0x75732032, 0x3434362c,
+	0x20422d33, 0x30303120, 0x4c657576, 0x656e2d48, 0x65766572, 0x6c65652c, 0x2042656c, 0x6769756d
 };
 
-static __constant__ const uint32_t d_T512[1024] = {
+__constant__  uint32_t d_T512[1024] = {
 	0xef0b0270, 0x3afd0000, 0x5dae0000, 0x69490000, 0x9b0f3c06, 0x4405b5f9, 0x66140a51, 0x924f5d0a, 0xc96b0030, 0xe7250000, 0x2f840000, 0x264f0000, 0x08695bf9, 0x6dfcf137, 0x509f6984, 0x9e69af68,
 	0xc96b0030, 0xe7250000, 0x2f840000, 0x264f0000, 0x08695bf9, 0x6dfcf137, 0x509f6984, 0x9e69af68, 0x26600240, 0xddd80000, 0x722a0000, 0x4f060000, 0x936667ff, 0x29f944ce, 0x368b63d5, 0x0c26f262,
 	0x145a3c00, 0xb9e90000, 0x61270000, 0xf1610000, 0xce613d6c, 0xb0493d78, 0x47a96720, 0xe18e24c5, 0x23671400, 0xc8b90000, 0xf4c70000, 0xfb750000, 0x73cd2465, 0xf8a6a549, 0x02c40a3f, 0xdc24e61f,
@@ -91,19 +97,45 @@ static __constant__ const uint32_t d_T512[1024] = {
 	0x7b280000, 0x57420000, 0xa9e50000, 0x634300a0, 0x9edb442f, 0x6d9995bb, 0x27f83b03, 0xc7ff60f0, 0x95bb0000, 0x81450000, 0x3b240000, 0x48db0140, 0x0a8a6c53, 0x56f56eec, 0x62c91877, 0xe7e00a94
 };
 
+
+__device__ __forceinline__ uint32_t hamsiandxor(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x6A;" : "+r"(a) : "r"(b), "r"(c));	// 0xEA = (F0 & CC) ^ AA
+	return a;
+}
+__device__ __forceinline__ uint32_t hamxor2(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x96;" : "+r"(a) : "r"(b), "r"(c));	// 0xEA = (F0 ^ CC) ^ AA
+	return a;
+}
+__device__ __forceinline__ uint32_t hamorxor(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x56;" : "+r"(a) : "r"(b), "r"(c));	// 0xEA = (F0 | CC) ^ AA
+	return a;
+}
+
+__device__ __forceinline__ uint32_t hamxorand(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x78;" : "+r"(a) : "r"(b), "r"(c));	// 0xEA = (F0 ^ CC) & AA
+	return a;
+}
+__device__ __forceinline__ uint32_t hamxorxor(uint32_t a, uint32_t b, uint32_t c)
+{
+	asm("lop3.b32 %0, %0, %1, %2, 0x78;" : "+r"(a) : "r"(b), "r"(c));	// 0xEA = (F0 ^ CC) ^ AA
+	return a;
+}
+
 #define SBOX(a, b, c, d) { \
 		uint32_t t; \
 		t =(a); \
-		a =(a & c) ^ d; \
-		c =(c ^ b) ^ a; \
-		d =(d | t) ^ b; \
+		a =hamsiandxor(a , c, d); \
+		c =hamxor2(c , b , a); \
+		d =hamorxor(d , t,  b); \
 		b = d; \
-		d =((d | (t ^ c)) ^ a); \
-		a&= b; \
-		t^=(c ^ a); \
-		b = b ^ d ^ t; \
+		d =hamorxor(d , (t ^ c) , a); \
+		t^=hamxorand(c , a , b); \
 		(a) = (c); \
-		(c) = (b); \
+		c = hamxor2(b , d , t); \
 		(b) = (d); \
 		(d) = (~t); \
 	}
@@ -111,8 +143,8 @@ static __constant__ const uint32_t d_T512[1024] = {
 #define HAMSI_L(a, b, c, d) { \
 		(a) = ROTL32(a, 13); \
 		(c) = ROTL32(c, 3); \
-		(b) ^= (a) ^ (c); \
-		(d) ^= (c) ^ ((a) << 3); \
+		(b) = hamxor2((b) , (a) , (c)); \
+		(d) = hamxor2((d) , (c) , ((a) << 3)); \
 		(b) = ROTL32(b, 1); \
 		(d) = ROTL32(d, 7); \
 		(a) = ROTL32(a ^ b ^ d, 5); \
@@ -174,60 +206,63 @@ static __constant__ const uint32_t d_T512[1024] = {
 		HAMSI_L(c[13], m[12], c[14], m[15]); \
 	}
 
-__global__ __launch_bounds__(384,2)
-void x13_hamsi512_gpu_hash_64_alexis(uint32_t threads, uint32_t *g_hash){
+__global__ __launch_bounds__(384, 2)
+void x13_hamsi512_gpu_hash_64(uint32_t threads, uint32_t *g_hash){
 
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	if (thread < threads)
 	{
-		uint32_t *Hash = &g_hash[thread<<4];
+		uint32_t *Hash = &g_hash[thread << 4];
 		uint8_t h1[64];
-		*(uint2x4*)&h1[ 0] = *(uint2x4*)&Hash[0];
+		*(uint2x4*)&h1[0] = *(uint2x4*)&Hash[0];
 		*(uint2x4*)&h1[32] = *(uint2x4*)&Hash[8];
 
 		uint32_t c[16], h[16], m[16];
-		*(uint16*)&c[ 0] = *(uint16*)&c_c[ 0];
-		*(uint16*)&h[ 0] = *(uint16*)&c_c[ 0];
+		*(uint16*)&c[0] = *(uint16*)&c_c[0];
+		*(uint16*)&h[0] = *(uint16*)&c_c[0];
 
 		const uint32_t *tp;
 		uint32_t dm;
 
-		for(int i = 0; i < 64; i += 8) {
+		for (int i = 0; i < 64; i += 8)
+		{
 			tp = &d_T512[0];
 
 			dm = -(h1[i] & 1);
-			m[ 0] = dm & tp[ 0]; m[ 1] = dm & tp[ 1];
-			m[ 2] = dm & tp[ 2]; m[ 3] = dm & tp[ 3];
-			m[ 4] = dm & tp[ 4]; m[ 5] = dm & tp[ 5];
-			m[ 6] = dm & tp[ 6]; m[ 7] = dm & tp[ 7];
-			m[ 8] = dm & tp[ 8]; m[ 9] = dm & tp[ 9];
+			m[0] = dm & tp[0]; m[1] = dm & tp[1];
+			m[2] = dm & tp[2]; m[3] = dm & tp[3];
+			m[4] = dm & tp[4]; m[5] = dm & tp[5];
+			m[6] = dm & tp[6]; m[7] = dm & tp[7];
+			m[8] = dm & tp[8]; m[9] = dm & tp[9];
 			m[10] = dm & tp[10]; m[11] = dm & tp[11];
 			m[12] = dm & tp[12]; m[13] = dm & tp[13];
 			m[14] = dm & tp[14]; m[15] = dm & tp[15];
 			tp += 16;
-			#pragma unroll 7
-			for (int v = 1; v < 8; v ++) {
-				dm = -((h1[i]>>v) & 1);
-				m[ 0] ^= dm & tp[ 0]; m[ 1] ^= dm & tp[ 1];
-				m[ 2] ^= dm & tp[ 2]; m[ 3] ^= dm & tp[ 3];
-				m[ 4] ^= dm & tp[ 4]; m[ 5] ^= dm & tp[ 5];
-				m[ 6] ^= dm & tp[ 6]; m[ 7] ^= dm & tp[ 7];
-				m[ 8] ^= dm & tp[ 8]; m[ 9] ^= dm & tp[ 9];
+#pragma unroll 7
+			for (int v = 1; v < 8; v++)
+			{
+				dm = -(bfe(h1[i], v, 1));
+				m[0] ^= dm & tp[0]; m[1] ^= dm & tp[1];
+				m[2] ^= dm & tp[2]; m[3] ^= dm & tp[3];
+				m[4] ^= dm & tp[4]; m[5] ^= dm & tp[5];
+				m[6] ^= dm & tp[6]; m[7] ^= dm & tp[7];
+				m[8] ^= dm & tp[8]; m[9] ^= dm & tp[9];
 				m[10] ^= dm & tp[10]; m[11] ^= dm & tp[11];
 				m[12] ^= dm & tp[12]; m[13] ^= dm & tp[13];
 				m[14] ^= dm & tp[14]; m[15] ^= dm & tp[15];
 				tp += 16;
 			}
-			#pragma unroll
-			for (int u = 1; u < 8; u ++) {
-				#pragma unroll 8
-				for (int v = 0; v < 8; v ++) {
-					dm = -((h1[i+u]>>v) & 1);
-					m[ 0] ^= dm & tp[ 0]; m[ 1] ^= dm & tp[ 1];
-					m[ 2] ^= dm & tp[ 2]; m[ 3] ^= dm & tp[ 3];
-					m[ 4] ^= dm & tp[ 4]; m[ 5] ^= dm & tp[ 5];
-					m[ 6] ^= dm & tp[ 6]; m[ 7] ^= dm & tp[ 7];
-					m[ 8] ^= dm & tp[ 8]; m[ 9] ^= dm & tp[ 9];
+
+#pragma unroll
+			for (int u = 1; u < 8; u++) {
+#pragma unroll 8
+				for (int v = 0; v < 8; v++) {
+					dm = -(bfe(h1[i + u], v, 1));
+					m[0] ^= dm & tp[0]; m[1] ^= dm & tp[1];
+					m[2] ^= dm & tp[2]; m[3] ^= dm & tp[3];
+					m[4] ^= dm & tp[4]; m[5] ^= dm & tp[5];
+					m[6] ^= dm & tp[6]; m[7] ^= dm & tp[7];
+					m[8] ^= dm & tp[8]; m[9] ^= dm & tp[9];
 					m[10] ^= dm & tp[10]; m[11] ^= dm & tp[11];
 					m[12] ^= dm & tp[12]; m[13] ^= dm & tp[13];
 					m[14] ^= dm & tp[14]; m[15] ^= dm & tp[15];
@@ -235,65 +270,355 @@ void x13_hamsi512_gpu_hash_64_alexis(uint32_t threads, uint32_t *g_hash){
 				}
 			}
 
-			#pragma unroll 6
-			for( int r = 0; r < 6; r++ ) {
+			//#pragma unroll 6
+			for (int r = 0; r < 6; r++) {
 				ROUND_BIG(r, d_alpha_n);
 			}
 			/* order is (no more) important */
-			h[ 0] ^= m[ 0]; h[ 1] ^= m[ 1]; h[ 2] ^= c[ 0]; h[ 3] ^= c[ 1];
-			h[ 4] ^= m[ 2]; h[ 5] ^= m[ 3]; h[ 6] ^= c[ 2]; h[ 7] ^= c[ 3];
-			h[ 8] ^= m[ 8]; h[ 9] ^= m[ 9]; h[10] ^= c[ 8]; h[11] ^= c[ 9];
+			h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+			h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+			h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
 			h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
 
-			*(uint16*)&c[ 0] = *(uint16*)&h[ 0];
+			*(uint16*)&c[0] = *(uint16*)&h[0];
 		}
 
-		*(uint2x4*)&m[ 0] = *(uint2x4*)&d_T512[112];
-		*(uint2x4*)&m[ 8] = *(uint2x4*)&d_T512[120];
+		*(uint2x4*)&m[0] = *(uint2x4*)&d_T512[112];
+		*(uint2x4*)&m[8] = *(uint2x4*)&d_T512[120];
 
-		#pragma unroll 6
-		for( int r = 0; r < 6; r++ ) {
+#pragma unroll 6
+		for (int r = 0; r < 6; r++) {
 			ROUND_BIG(r, d_alpha_n);
 		}
 
 		/* order is (no more) important */
-		h[ 0] ^= m[ 0]; h[ 1] ^= m[ 1]; h[ 2] ^= c[ 0]; h[ 3] ^= c[ 1];
-		h[ 4] ^= m[ 2]; h[ 5] ^= m[ 3]; h[ 6] ^= c[ 2]; h[ 7] ^= c[ 3];
-		h[ 8] ^= m[ 8]; h[ 9] ^= m[ 9]; h[10] ^= c[ 8]; h[11] ^= c[ 9];
+		h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+		h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+		h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
 		h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
 
-		*(uint16*)&c[ 0] = *(uint16*)&h[ 0];
+		*(uint16*)&c[0] = *(uint16*)&h[0];
 
-		*(uint2x4*)&m[ 0] = *(uint2x4*)&d_T512[784];
-		*(uint2x4*)&m[ 8] = *(uint2x4*)&d_T512[792];
+		*(uint2x4*)&m[0] = *(uint2x4*)&d_T512[784];
+		*(uint2x4*)&m[8] = *(uint2x4*)&d_T512[792];
 
-		#pragma unroll 12
-		for( int r = 0; r < 12; r++ )
+#pragma unroll 12
+		for (int r = 0; r < 12; r++)
 			ROUND_BIG(r, d_alpha_f);
 
 		/* order is (no more) important */
-		h[ 0] ^= m[ 0]; h[ 1] ^= m[ 1]; h[ 2] ^= c[ 0]; h[ 3] ^= c[ 1];
-		h[ 4] ^= m[ 2]; h[ 5] ^= m[ 3]; h[ 6] ^= c[ 2]; h[ 7] ^= c[ 3];
-		h[ 8] ^= m[ 8]; h[ 9] ^= m[ 9]; h[10] ^= c[ 8]; h[11] ^= c[ 9];
+		h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+		h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+		h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
 		h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
 
-		*(uint2x4*)&Hash[ 0] = *(uint2x4*)&h[ 0];
-		*(uint2x4*)&Hash[ 8] = *(uint2x4*)&h[ 8];
 
-		#pragma unroll 16
-		for(int i = 0; i < 16; i++)
-			Hash[i] = cuda_swab32(Hash[i]);
+#pragma unroll 16
+		for (int i = 0; i < 16; i++)
+			h[i] = cuda_swab32(h[i]);
+
+
+		*(uint2x4*)&Hash[0] = *(uint2x4*)&h[0];
+		*(uint2x4*)&Hash[8] = *(uint2x4*)&h[8];
 	}
 }
 
+
+__global__ __launch_bounds__(384, 2)
+__global__
+void x13_hamsi512_gpu_hash_80(uint32_t threads, uint32_t startNounce, uint32_t *g_hash)
+{
+	uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads)
+	{
+		uint32_t *Hash = &g_hash[thread << 4];
+		uint32_t nounce = cuda_swab32(startNounce + thread);
+		unsigned char h1[80];
+#pragma unroll
+		for (int i = 0; i < 10; i++)
+			((uint2*)h1)[i] = ((uint2*)c_PaddedMessage80)[i];
+		//((uint64_t*)h1)[9] = REPLACE_HIDWORD(c_PaddedMessage80[9], cuda_swab32(startNonce + thread));
+		((uint32_t*)h1)[19] = (nounce);
+
+		uint32_t c[16], h[16], m[16];
+		*(uint16*)&c[0] = *(uint16*)&c_c[0];
+		*(uint16*)&h[0] = *(uint16*)&c_c[0];
+
+		const uint32_t *tp;
+		uint32_t dm;
+
+		for (int i = 0; i < 80; i += 8)
+		{
+			tp = &d_T512[0];
+
+			dm = -(h1[i] & 1);
+			m[0] = dm & tp[0]; m[1] = dm & tp[1];
+			m[2] = dm & tp[2]; m[3] = dm & tp[3];
+			m[4] = dm & tp[4]; m[5] = dm & tp[5];
+			m[6] = dm & tp[6]; m[7] = dm & tp[7];
+			m[8] = dm & tp[8]; m[9] = dm & tp[9];
+			m[10] = dm & tp[10]; m[11] = dm & tp[11];
+			m[12] = dm & tp[12]; m[13] = dm & tp[13];
+			m[14] = dm & tp[14]; m[15] = dm & tp[15];
+			tp += 16;
+			//#pragma unroll 7
+			for (int v = 1; v < 8; v++)
+			{
+				dm = -((h1[i] >> v) & 1);
+				m[0] ^= dm & tp[0]; m[1] ^= dm & tp[1];
+				m[2] ^= dm & tp[2]; m[3] ^= dm & tp[3];
+				m[4] ^= dm & tp[4]; m[5] ^= dm & tp[5];
+				m[6] ^= dm & tp[6]; m[7] ^= dm & tp[7];
+				m[8] ^= dm & tp[8]; m[9] ^= dm & tp[9];
+				m[10] ^= dm & tp[10]; m[11] ^= dm & tp[11];
+				m[12] ^= dm & tp[12]; m[13] ^= dm & tp[13];
+				m[14] ^= dm & tp[14]; m[15] ^= dm & tp[15];
+				tp += 16;
+			}
+
+			//#pragma unroll
+			for (int u = 1; u < 8; u++) {
+#pragma unroll 8
+				for (int v = 0; v < 8; v++) {
+					dm = -((h1[i + u] >> v) & 1);
+					m[0] ^= dm & tp[0]; m[1] ^= dm & tp[1];
+					m[2] ^= dm & tp[2]; m[3] ^= dm & tp[3];
+					m[4] ^= dm & tp[4]; m[5] ^= dm & tp[5];
+					m[6] ^= dm & tp[6]; m[7] ^= dm & tp[7];
+					m[8] ^= dm & tp[8]; m[9] ^= dm & tp[9];
+					m[10] ^= dm & tp[10]; m[11] ^= dm & tp[11];
+					m[12] ^= dm & tp[12]; m[13] ^= dm & tp[13];
+					m[14] ^= dm & tp[14]; m[15] ^= dm & tp[15];
+					tp += 16;
+				}
+			}
+
+			//#pragma unroll 6
+			for (int r = 0; r < 6; r++) {
+				ROUND_BIG(r, d_alpha_n);
+			}
+			/* order is (no more) important */
+			h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+			h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+			h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
+			h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
+
+			*(uint16*)&c[0] = *(uint16*)&h[0];
+		}
+
+		*(uint2x4*)&m[0] = *(uint2x4*)&d_T512[112];
+		*(uint2x4*)&m[8] = *(uint2x4*)&d_T512[120];
+
+#pragma unroll 6
+		for (int r = 0; r < 6; r++) {
+			ROUND_BIG(r, d_alpha_n);
+		}
+
+		/* order is (no more) important */
+		h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+		h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+		h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
+		h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
+
+		*(uint16*)&c[0] = *(uint16*)&h[0];
+
+		*(uint2x4*)&m[0] = *(uint2x4*)&d_T512[784];
+		*(uint2x4*)&m[8] = *(uint2x4*)&d_T512[792];
+
+#pragma unroll 12
+		for (int r = 0; r < 12; r++)
+			ROUND_BIG(r, d_alpha_f);
+
+		/* order is (no more) important */
+		h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+		h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+		h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
+		h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
+
+
+#pragma unroll 16
+		for (int i = 0; i < 16; i++)
+			h[i] = cuda_swab32(h[i]);
+
+
+		*(uint2x4*)&Hash[0] = *(uint2x4*)&h[0];
+		*(uint2x4*)&Hash[8] = *(uint2x4*)&h[8];
+	}
+}
+
+__global__ __launch_bounds__(384, 2)
+void x13_hamsi512_gpu_hash_64_final(uint32_t threads, uint32_t *g_hash, uint32_t *resNonce, const uint64_t target)
+{
+
+	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads)
+	{
+		uint32_t *Hash = &g_hash[thread << 4];
+		uint8_t h1[64];
+		*(uint2x4*)&h1[0] = *(uint2x4*)&Hash[0];
+		*(uint2x4*)&h1[32] = *(uint2x4*)&Hash[8];
+
+		uint32_t c[16], h[16], m[16];
+		*(uint16*)&c[0] = *(uint16*)&c_c[0];
+		*(uint16*)&h[0] = *(uint16*)&c_c[0];
+
+		const uint32_t *tp;
+		uint32_t dm;
+
+		for (int i = 0; i < 64; i += 8)
+		{
+			tp = &d_T512[0];
+
+			dm = -(h1[i] & 1);
+			m[0] = dm & tp[0]; m[1] = dm & tp[1];
+			m[2] = dm & tp[2]; m[3] = dm & tp[3];
+			m[4] = dm & tp[4]; m[5] = dm & tp[5];
+			m[6] = dm & tp[6]; m[7] = dm & tp[7];
+			m[8] = dm & tp[8]; m[9] = dm & tp[9];
+			m[10] = dm & tp[10]; m[11] = dm & tp[11];
+			m[12] = dm & tp[12]; m[13] = dm & tp[13];
+			m[14] = dm & tp[14]; m[15] = dm & tp[15];
+			tp += 16;
+			//#pragma unroll 7
+			for (int v = 1; v < 8; v++) {
+				dm = -((h1[i] >> v) & 1);
+				m[0] ^= dm & tp[0]; m[1] ^= dm & tp[1];
+				m[2] ^= dm & tp[2]; m[3] ^= dm & tp[3];
+				m[4] ^= dm & tp[4]; m[5] ^= dm & tp[5];
+				m[6] ^= dm & tp[6]; m[7] ^= dm & tp[7];
+				m[8] ^= dm & tp[8]; m[9] ^= dm & tp[9];
+				m[10] ^= dm & tp[10]; m[11] ^= dm & tp[11];
+				m[12] ^= dm & tp[12]; m[13] ^= dm & tp[13];
+				m[14] ^= dm & tp[14]; m[15] ^= dm & tp[15];
+				tp += 16;
+			}
+
+			//#pragma unroll
+			for (int u = 1; u < 8; u++) {
+#pragma unroll 8
+				for (int v = 0; v < 8; v++) {
+					dm = -((h1[i + u] >> v) & 1);
+					m[0] ^= dm & tp[0]; m[1] ^= dm & tp[1];
+					m[2] ^= dm & tp[2]; m[3] ^= dm & tp[3];
+					m[4] ^= dm & tp[4]; m[5] ^= dm & tp[5];
+					m[6] ^= dm & tp[6]; m[7] ^= dm & tp[7];
+					m[8] ^= dm & tp[8]; m[9] ^= dm & tp[9];
+					m[10] ^= dm & tp[10]; m[11] ^= dm & tp[11];
+					m[12] ^= dm & tp[12]; m[13] ^= dm & tp[13];
+					m[14] ^= dm & tp[14]; m[15] ^= dm & tp[15];
+					tp += 16;
+				}
+			}
+
+			//#pragma unroll 6
+			for (int r = 0; r < 6; r++) {
+				ROUND_BIG(r, d_alpha_n);
+			}
+			/* order is (no more) important */
+			h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+			h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+			h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
+			h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
+
+			*(uint16*)&c[0] = *(uint16*)&h[0];
+		}
+
+		*(uint2x4*)&m[0] = *(uint2x4*)&d_T512[112];
+		*(uint2x4*)&m[8] = *(uint2x4*)&d_T512[120];
+
+#pragma unroll 6
+		for (int r = 0; r < 6; r++) {
+			ROUND_BIG(r, d_alpha_n);
+		}
+
+		/* order is (no more) important */
+		h[0] ^= m[0]; h[1] ^= m[1]; h[2] ^= c[0]; h[3] ^= c[1];
+		h[4] ^= m[2]; h[5] ^= m[3]; h[6] ^= c[2]; h[7] ^= c[3];
+		h[8] ^= m[8]; h[9] ^= m[9]; h[10] ^= c[8]; h[11] ^= c[9];
+		h[12] ^= m[10]; h[13] ^= m[11]; h[14] ^= c[10]; h[15] ^= c[11];
+
+		*(uint16*)&c[0] = *(uint16*)&h[0];
+
+		*(uint2x4*)&m[0] = *(uint2x4*)&d_T512[784];
+		*(uint2x4*)&m[8] = *(uint2x4*)&d_T512[792];
+
+#pragma unroll 12
+		for (int r = 0; r < 12; r++)
+			ROUND_BIG(r, d_alpha_f);
+
+		/* order is (no more) important */
+		//		h[0] ^= m[0]; 
+		//		h[1] ^= m[1]; 
+		//		h[2] ^= c[0]; 
+		//		h[3] ^= c[1];
+		//		h[4] ^= m[2]; 
+		//		h[5] ^= m[3]; 
+		h[6] ^= c[2];
+		h[7] ^= c[3];
+		//		h[8] ^= m[8]; 
+		//		h[9] ^= m[9]; 
+		//		h[10] ^= c[8]; 
+		//		h[11] ^= c[9];
+		//		h[12] ^= m[10]; 
+		//		h[13] ^= m[11]; 
+		//		h[14] ^= c[10]; 
+		//		h[15] ^= c[11];
+
+		//#pragma unroll 16
+		//		for (int i = 0; i < 16; i++)
+		//			h[i] = cuda_swab32(h[i]);
+
+		//		*(uint2x4*)&Hash[0] = *(uint2x4*)&h[0];
+		//		*(uint2x4*)&Hash[8] = *(uint2x4*)&h[8];
+
+		uint64_t check = devectorize(make_uint2(cuda_swab32(h[6]), cuda_swab32(h[7])));
+
+		if (check <= target)
+		{
+			uint32_t tmp = atomicExch(&resNonce[0], thread);
+			if (tmp != UINT32_MAX)
+				resNonce[1] = tmp;
+		}
+	}
+}
+
+
+/*__host__
+void x16_hamsi512_setBlock_80(uint64_t *pdata)
+{
+	cudaMemcpyToSymbol(c_PaddedMessage80, pdata, sizeof(c_PaddedMessage80), 0, cudaMemcpyHostToDevice);
+}
+*/
+
 __host__
-void x13_hamsi512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_hash)
+void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash)
 {
 	const uint32_t threadsperblock = 384;
 
-	dim3 grid((threads + threadsperblock-1)/threadsperblock);
+	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
 	dim3 block(threadsperblock);
 
-	x13_hamsi512_gpu_hash_64_alexis<<<grid, block>>>(threads, d_hash);
+	x13_hamsi512_gpu_hash_64 << <grid, block >> >(threads, d_hash);
+}
 
+/*
+void x16_hamsi512_cuda_hash_80(int thr_id, const uint32_t threads, uint32_t startnonce, uint32_t *d_hash)
+{
+	const uint32_t threadsperblock = 384;
+
+	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
+	dim3 block(threadsperblock);
+
+	x13_hamsi512_gpu_hash_80 << <grid, block >> > (threads, startnonce, d_hash);
+}
+*/
+
+void x13_hamsi512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target)
+{
+	const uint32_t threadsperblock = 384;
+
+	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
+	dim3 block(threadsperblock);
+
+	x13_hamsi512_gpu_hash_64_final << <grid, block >> >(threads, d_hash, d_resNonce, target);
 }

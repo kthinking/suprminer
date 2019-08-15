@@ -276,10 +276,10 @@ void myriadgroestl_gpu_hash_quad(uint32_t threads, uint32_t startNounce, uint32_
 		to_bitslice_quad(paddedInput, msgBitsliced);
 
 		uint32_t state[8];
-		groestl512_progressMessage_quad(state, msgBitsliced);
+//		groestl512_progressMessage_quad(state, msgBitsliced);
 
 		uint32_t out_state[16];
-		from_bitslice_quad(state, out_state);
+//		from_bitslice_quad(state, out_state);
 
 		if ((threadIdx.x & 0x03) == 0)
 		{

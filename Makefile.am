@@ -37,7 +37,7 @@ ccminer_SOURCES	= elist.h miner.h compat.h \
 			  myriadgroestl.cpp cuda_myriadgroestl.cu \
 			  lyra2/Lyra2.c lyra2/Sponge.c \
 			  lyra2/lyra2RE.cu lyra2/cuda_lyra2.cu \
-		          lyra2/lyra2REv2.cu lyra2/cuda_lyra2v2.cu \
+		      lyra2/lyra2REv2.cu lyra2/cuda_lyra2v2.cu \
 			  lyra2/Lyra2Z.c lyra2/lyra2Z.cu lyra2/cuda_lyra2Z.cu \
 			  Algo256/cuda_bmw256.cu Algo256/cuda_cubehash256.cu \
 			  Algo256/cuda_blake256.cu Algo256/cuda_groestl256.cu \
@@ -70,14 +70,15 @@ ccminer_SOURCES	= elist.h miner.h compat.h \
 			  qubit/qubit.cu qubit/qubit_luffa512.cu qubit/qubit_luffa512_alexis.cu qubit/deep.cu qubit/luffa.cu \
 			  tribus/tribus.cu tribus/cuda_echo512_final.cu \
 			  x11/x11.cu x11/fresh.cu x11/cuda_x11_luffa512.cu x11/cuda_x11_cubehash512.cu x11/cuda_x11_cubehash512_80.cu \
-			  x11/cuda_x11_shavite512.cu x11/cuda_x11_shavite512_alexis.cu x11/cuda_x11_simd512.cu x11/cuda_x11_echo.cu x11/cuda_x11_echo_alexis.cu \
+			  x11/cuda_x11_shavite512.cu x11/cuda_x11_shavite512_sp.cu x11/cuda_x11_simd512.cu x11/cuda_x11_echo.cu x11/cuda_x11_echo_sp.cu \
 			  x11/cuda_x11_luffa512_Cubehash.cu x11/x11evo.cu x11/timetravel.cu x11/bitcore.cu \
-			  x13/x13.cu x13/cuda_x13_hamsi512.cu x13/cuda_x13_hamsi512_alexis.cu x13/cuda_x13_fugue512.cu x13/cuda_x13_fugue512_alexis.cu \
+			  x13/x13.cu x13/cuda_x13_hamsi512.cu x13/cuda_x13_hamsi512_sp.cu x13/cuda_x13_fugue512.cu x13/cuda_x13_fugue512_sp.cu \
 			  x13/hsr.cu x13/cuda_hsr_sm3.cu x13/sm3.c \
-			  x15/x14.cu x15/x15.cu x15/cuda_x14_shabal512.cu x15/cuda_x14_shabal512_alexis.cu x15/cuda_x15_whirlpool.cu \
+			  x15/x14.cu x15/x15.cu x15/cuda_x14_shabal512.cu x15/cuda_x14_shabal512_sp.cu x15/cuda_x15_whirlpool.cu \
 			  x15/whirlpool.cu x15/cuda_x15_whirlpool_sm3.cu \
 			  x16r/x16s.cu x16r/x16r.cu x16r/cuda_x16_echo512.cu x16r/cuda_x16_fugue512.cu \
 			  x16r/cuda_x16_shabal512.cu x16r/cuda_x16_simd512_80.cu \
+			  x16r/cuda_x16_shavite512.cu \
 			  x17/x17.cu x17/hmq17.cu x17/cuda_x17_haval256.cu x17/cuda_x17_sha512.cu \
 			  x11/phi.cu x11/cuda_streebog_maxwell.cu \
 			  x11/c11.cu x11/s3.cu x11/sib.cu x11/veltor.cu x11/cuda_streebog.cu

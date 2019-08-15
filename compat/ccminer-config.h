@@ -164,7 +164,7 @@
 #define PACKAGE_URL "http://github.com/ocminer/suprminer"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.6"
+#define PACKAGE_VERSION "SPMOD-GIT"
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be

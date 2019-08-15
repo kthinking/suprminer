@@ -828,6 +828,78 @@ void qubit_luffa512_cpu_setBlock_80_alexis(void *pdata)
 	qubit_cpu_precalc();
 }
 
+
+__global__
+void x11_luffa512_gpu_hash_64_final(uint32_t threads, uint32_t *g_hash, uint32_t* resNonce, uint64_t target)
+{
+
+	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	uint32_t statebuffer[8];
+
+	if (thread < threads)
+	{
+		uint32_t statechainv[40] = {
+			0x8bb0a761, 0xc2e4aa8b, 0x2d539bc9, 0x381408f8, 0x478f6633, 0x255a46ff, 0x581c37f7, 0x601c2e8e,
+			0x266c5f9d, 0xc34715d8, 0x8900670e, 0x51a540be, 0xe4ce69fb, 0x5089f4d4, 0x3cc0a506, 0x609bcb02,
+			0xa4e3cd82, 0xd24fd6ca, 0xc0f196dc, 0xcf41eafe, 0x0ff2e673, 0x303804f2, 0xa7b3cd48, 0x677addd4,
+			0x66e66a8a, 0x2303208f, 0x486dafb4, 0xc0d37dc6, 0x634d15af, 0xe5af6747, 0x10af7e38, 0xee7e6428,
+			0x01262e5d, 0xc92c2e64, 0x82fee966, 0xcea738d3, 0x867de2b0, 0xe0714818, 0xda6e831f, 0xa7062529
+		};
+		uint2x4* Hash = (uint2x4*)&g_hash[thread << 4];
+
+		uint32_t hash[16];
+
+		*(uint2x4*)&hash[0] = __ldg4(&Hash[0]);
+		*(uint2x4*)&hash[8] = __ldg4(&Hash[1]);
+
+#pragma unroll 8
+		for (int i = 0; i<8; i++){
+			statebuffer[i] = cuda_swab32(hash[i]);
+		}
+
+		rnd512_first(statechainv, statebuffer);
+
+#pragma unroll 8
+		for (int i = 0; i<8; i++){
+			statebuffer[i] = cuda_swab32(hash[8 + i]);
+		}
+
+		rnd512(statebuffer, statechainv);
+
+		statebuffer[0] = 0x80000000;
+#pragma unroll 7
+		for (uint32_t i = 1; i<8; i++)
+			statebuffer[i] = 0;
+
+		rnd512(statebuffer, statechainv);
+
+		/*---- blank round with m=0 ----*/
+		rnd512_nullhash(statechainv);
+
+#pragma unroll 8
+		for (int i = 0; i<8; i++)
+			hash[i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+
+		//		rnd512_nullhash(statechainv);
+		//		#pragma unroll 8
+		//		for (int i = 0; i<8; i++)
+		//			hash[8 + i] = (statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+
+		//		Hash[0] = *(uint2x4*)&hash[0];
+		//		Hash[1] = *(uint2x4*)&hash[8];
+
+		if (devectorize(make_uint2(hash[6], hash[7])) <= target)
+		{
+			const uint32_t tmp = atomicExch(&resNonce[0], thread);
+			if (tmp != UINT32_MAX)
+				resNonce[1] = tmp;
+		}
+
+
+	}
+}
+
+
 __host__
 void x11_luffa512_cpu_hash_64_alexis(int thr_id, uint32_t threads,uint32_t *d_hash)
 {
@@ -838,4 +910,15 @@ void x11_luffa512_cpu_hash_64_alexis(int thr_id, uint32_t threads,uint32_t *d_ha
     dim3 block(threadsperblock);
 
     x11_luffa512_gpu_hash_64_alexis<<<grid, block>>>(threads,d_hash);
+}
+
+__host__
+void x11_luffa512_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint64_t target, uint32_t *d_resNonce)
+{
+	const uint32_t threadsperblock = 384;
+
+	// berechne wie viele Thread Blocks wir brauchen
+	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
+	dim3 block(threadsperblock);
+	x11_luffa512_gpu_hash_64_final << <grid, block >> >(threads, d_hash, d_resNonce, target);
 }

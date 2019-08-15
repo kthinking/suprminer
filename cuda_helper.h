@@ -480,11 +480,11 @@ static __host__ __device__ __forceinline__ uint64_t devectorize(uint2 v) {
 /**
  * uint2 direct ops by c++ operator definitions
  */
-static __device__ __forceinline__ uint2 operator^ (uint2 a, uint2 b) { return make_uint2(a.x ^ b.x, a.y ^ b.y); }
-static __device__ __forceinline__ uint2 operator& (uint2 a, uint2 b) { return make_uint2(a.x & b.x, a.y & b.y); }
-static __device__ __forceinline__ uint2 operator| (uint2 a, uint2 b) { return make_uint2(a.x | b.x, a.y | b.y); }
-static __device__ __forceinline__ uint2 operator~ (uint2 a) { return make_uint2(~a.x, ~a.y); }
-static __device__ __forceinline__ void operator^= (uint2 &a, uint2 b) { a = a ^ b; }
+static __device__ __host__ __forceinline__ uint2 operator^ (uint2 a, uint2 b) { return make_uint2(a.x ^ b.x, a.y ^ b.y); }
+static __device__ __host__ __forceinline__ uint2 operator& (uint2 a, uint2 b) { return make_uint2(a.x & b.x, a.y & b.y); }
+static __device__ __host__ __forceinline__ uint2 operator| (uint2 a, uint2 b) { return make_uint2(a.x | b.x, a.y | b.y); }
+static __device__ __host__ __forceinline__ uint2 operator~ (uint2 a) { return make_uint2(~a.x, ~a.y); }
+static __device__ __host__ __forceinline__ void operator^= (uint2 &a, uint2 b) { a = a ^ b; }
 
 static __device__ __forceinline__ uint2 operator+ (uint2 a, uint2 b) {
 	return vectorize(devectorize(a) + devectorize(b));
@@ -601,8 +601,34 @@ __device__ __inline__ uint2 ROR24(const uint2 a)
 	result.y = __byte_perm(a.y, a.x, 0x6543);
 	return result;
 }
+__device__ __forceinline__
+uint2 ROL16(const uint2 a){
+	uint2 result;
+	result.x = __byte_perm(a.x, a.y, 0x1076);
+	result.y = __byte_perm(a.y, a.x, 0x1076);
+
+	return result;
+}
+
+__device__ __forceinline__
+uint2 ROL24(const uint2 a){
+	uint2 result;
+	result.x = __byte_perm(a.x, a.y, 0x0765);
+	result.y = __byte_perm(a.y, a.x, 0x0765);
+	return result;
+}
+__device__ __forceinline__
+uint2 ROR8(const uint2 a){
+	uint2 result;
+	result.x = __byte_perm(a.x, a.y, 0x4321);
+	result.y = __byte_perm(a.y, a.x, 0x4321);
+	return result;
+}
 #else
+#define ROR8(u)  ROR2(u, 8)
 #define ROL8(u)  ROL2(u, 8)
+#define ROL16(u) ROL2(u,16)
+#define ROL24(u) ROL2(u,24)
 #define ROR16(u) ROR2(u,16)
 #define ROR24(u) ROR2(u,24)
 #endif

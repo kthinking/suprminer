@@ -21,6 +21,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{36DC07F9-A4A6-4877-A146-1B960083CF6F}</ProjectGuid>
     <RootNamespace>ccminer</RootNamespace>
+    <CudaToolkitCustomDir>$(CUDA_PATH_V9_2)</CudaToolkitCustomDir>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
@@ -123,10 +124,10 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
       <CompileAsManaged>false</CompileAsManaged>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -155,7 +156,7 @@
       <MaxRegCount>80</MaxRegCount>
       <PtxAsOptionV>true</PtxAsOptionV>
       <Keep>true</Keep>
-      <CodeGeneration>compute_61,sm_61;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
+      <CodeGeneration>compute_50,sm_50;compute_52,sm_52;compute_61,sm_61</CodeGeneration>
       <AdditionalOptions>--ptxas-options="-O2" --Wno-deprecated-gpu-targets %(AdditionalOptions)</AdditionalOptions>
       <Optimization>O2</Optimization>
     </CudaCompile>
@@ -236,9 +237,7 @@
     <ClCompile Include="crypto\cryptolight-cpu.cpp" />
     <ClCompile Include="crypto\cryptonight-cpu.cpp" />
     <ClCompile Include="crypto\cpu\c_keccak.c" />
-    <ClCompile Include="equi\blake2\blake2bx.cpp">
-      <EnableEnhancedInstructionSet Condition="'$(Platform)'=='Win32'">StreamingSIMDExtensions</EnableEnhancedInstructionSet>
-    </ClCompile>
+    <ClCompile Include="equi\blake2\blake2bx.cpp" />
     <ClCompile Include="equi\equi-stratum.cpp" />
     <ClCompile Include="equi\equi.cpp" />
     <ClCompile Include="equi\equihash.cpp" />
@@ -268,7 +267,7 @@
     <ClCompile Include="neoscrypt\neoscrypt.cpp" />
     <ClCompile Include="neoscrypt\neoscrypt-cpu.c" />
     <ClInclude Include="neoscrypt\cuda_vectors.h" />
-    <ClInclude Include="x11\cuda_x11_aes_alexis.cuh" />
+    <ClInclude Include="x11\cuda_x11_aes_sp.cuh" />
     <ClInclude Include="x11\cuda_x11_simd512_sm2.cuh" />
     <ClInclude Include="x16r\cuda_x16r.h" />
     <CudaCompile Include="Algo256\bmw.cu" />
@@ -293,7 +292,7 @@
     <ClInclude Include="crypto\cn_keccak.cuh" />
     <ClInclude Include="crypto\cn_skein.cuh" />
     <CudaCompile Include="crypto\wildkeccak.cu">
-      <MaxRegCount>128</MaxRegCount>
+      <MaxRegCount>80</MaxRegCount>
     </CudaCompile>
     <CudaCompile Include="equi\cuda_equi.cu">
       <CodeGeneration>compute_52,sm_52;compute_50,sm_50;compute_30,sm_30</CodeGeneration>
@@ -437,12 +436,13 @@
     <CudaCompile Include="sha256\sha256d.cu" />
     <CudaCompile Include="sha256\cuda_sha256t.cu" />
     <CudaCompile Include="sha256\sha256t.cu" />
-    <CudaCompile Include="x11\cuda_x11_echo_alexis.cu" />
-    <CudaCompile Include="x11\cuda_x11_shavite512_alexis.cu" />
-    <CudaCompile Include="x13\cuda_x13_fugue512_alexis.cu" />
-    <CudaCompile Include="x13\cuda_x13_hamsi512_alexis.cu" />
-    <CudaCompile Include="x15\cuda_x14_shabal512_alexis.cu" />
+    <CudaCompile Include="x11\cuda_x11_echo_sp.cu" />
+    <CudaCompile Include="x11\cuda_x11_shavite512_sp.cu" />
+    <CudaCompile Include="x13\cuda_x13_fugue512_sp.cu" />
+    <CudaCompile Include="x13\cuda_x13_hamsi512_sp.cu" />
+    <CudaCompile Include="x15\cuda_x14_shabal512_sp.cu" />
     <CudaCompile Include="x15\cuda_x15_whirlpool_sm3.cu" />
+    <CudaCompile Include="x16r\cuda_x16_shavite512.cu" />
     <CudaCompile Include="x16r\x16r.cu" />
     <CudaCompile Include="x16r\x16s.cu" />
     <CudaCompile Include="x16r\cuda_x16_echo512.cu" />
@@ -481,7 +481,7 @@
     </CudaCompile>
     <CudaCompile Include="Algo256\blake2s.cu" />
     <CudaCompile Include="Algo256\decred.cu">
-      <MaxRegCount>128</MaxRegCount>
+      <MaxRegCount>80</MaxRegCount>
     </CudaCompile>
     <CudaCompile Include="Algo256\vanilla.cu" />
     <CudaCompile Include="Algo256\keccak256.cu" />
@@ -505,7 +505,8 @@
       <FastMath>true</FastMath>
     </CudaCompile>
     <CudaCompile Include="quark\cuda_bmw512.cu">
-      <MaxRegCount>128</MaxRegCount>
+      <MaxRegCount>80</MaxRegCount>
+      <MaxRegCount Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">128</MaxRegCount>
     </CudaCompile>
     <CudaCompile Include="quark\cuda_jh512.cu">
       <MaxRegCount>80</MaxRegCount>
@@ -571,11 +572,12 @@
       <MaxRegCount>76</MaxRegCount>
     </CudaCompile>
     <CudaCompile Include="x11\cuda_x11_shavite512.cu">
-      <MaxRegCount>128</MaxRegCount>
+      <MaxRegCount>80</MaxRegCount>
     </CudaCompile>
     <ClInclude Include="x11\cuda_x11_simd512_func.cuh" />
     <CudaCompile Include="x11\cuda_x11_simd512.cu">
       <MaxRegCount>64</MaxRegCount>
+      <MaxRegCount Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">128</MaxRegCount>
     </CudaCompile>
     <CudaCompile Include="x11\cuda_streebog.cu" />
     <CudaCompile Include="x11\cuda_streebog_maxwell.cu" />

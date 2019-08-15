@@ -3,7 +3,7 @@
  *
  * ==========================(LICENSE BEGIN)============================
  *
- * Copyright (c) 2014-2016 djm34, tpruvot, SP
+ * Copyright (c) 2014-2018 djm34, tpruvot, SP
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -27,7 +27,7 @@
  * ===========================(LICENSE END)=============================
  * @author djm34 (initial draft)
  * @author tpruvot (dual old/whirlpool modes, midstate)
- * @author SP ("final" function opt and tuning)
+ * @author SP ("final" function opt and tuning, 40% faster whirlpool80)
  */
 #include <stdio.h>
 #include <memory.h>
@@ -1898,12 +1898,14 @@ static const uint64_t plain_T7[256] = {
 #endif /* USE_ALL_TABLES */
 
 
+
 /**
  * Round constants.
  */
 __device__ uint64_t InitVector_RC[10];
 
 /* ====================================================================== */
+
 
 
 #define TRANSFER(dst, src) { \
@@ -1928,7 +1930,7 @@ static uint64_t table_skew(uint64_t val, int num) {
 
 __device__ __forceinline__
 static uint64_t ROUND_ELT(const uint64_t* sharedMemory, uint64_t* __restrict__ in,
-	int i0,int i1,int i2,int i3,int i4,int i5,int i6,int i7)
+int i0,int i1,int i2,int i3,int i4,int i5,int i6,int i7)
 {
 	uint32_t idx0, idx1, idx2, idx3, idx4, idx5, idx6, idx7;
 	idx0 = BYTE(in[i0], 0);
@@ -1949,7 +1951,7 @@ static uint64_t ROUND_ELT(const uint64_t* sharedMemory, uint64_t* __restrict__ i
 		table_skew(sharedMemory[idx5], 5),
 		table_skew(sharedMemory[idx6], 6),
 		table_skew(sharedMemory[idx7], 7)
-	);
+		);
 }
 
 #else
@@ -1959,11 +1961,12 @@ static uint64_t ROUND_ELT(const uint64_t* sharedMemory, uint64_t* __restrict__ i
 const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7)
 {
 	uint32_t* in32 = (uint32_t*)in;
-	return (sharedMemory[__byte_perm(in32[(i0 << 1)], 0, 0x4440)]        ^ sharedMemory[__byte_perm(in32[(i1 << 1)], 0, 0x4441) + 256] ^
-		sharedMemory[__byte_perm(in32[(i2 << 1)], 0, 0x4442) + 512]      ^ sharedMemory[__byte_perm(in32[(i3 << 1)], 0, 0x4443) + 768] ^
-		sharedMemory[__byte_perm(in32[(i4 << 1) + 1], 0, 0x4440) + 1024] ^ sharedMemory[__byte_perm(in32[(i5 << 1) + 1], 0, 0x4441) + 1280] ^
-		sharedMemory[__byte_perm(in32[(i6 << 1) + 1], 0, 0x4442) + 1536] ^ sharedMemory[__byte_perm(in32[(i7 << 1) + 1], 0, 0x4443) + 1792]);
+	return (__ldg((uint64_t*)&mixTob0Tox[__byte_perm(in32[(i0 << 1)], 0, 0x4440)]) ^ sharedMemory[__byte_perm(in32[(i1 << 1)], 0, 0x4441) + 256] ^
+		sharedMemory[__byte_perm(in32[(i2 << 1)], 0, 0x4442) + 512] ^ sharedMemory[__byte_perm(in32[(i3 << 1)], 0, 0x4443) + 768] ^
+		__ldg((uint64_t*)&mixTob4Tox[__byte_perm(in32[(i4 << 1) + 1], 0, 0x4440)]) ^ sharedMemory[__byte_perm(in32[(i5 << 1) + 1], 0, 0x4441) + 1280] ^
+		__ldg((uint64_t*)&mixTob6Tox[__byte_perm(in32[(i6 << 1) + 1], 0, 0x4442)]) ^ sharedMemory[__byte_perm(in32[(i7 << 1) + 1], 0, 0x4443) + 1792]);
 }
+
 #endif /* USE_ALL_TABLES */
 
 #define ROUND(table, in, out, c0, c1, c2, c3, c4, c5, c6, c7) { \
@@ -1996,26 +1999,26 @@ const int i0, const int i1, const int i2, const int i3, const int i4, const int 
 	ROUND(table, in, out, key[0], key[1], key[2],key[3], key[4], key[5], key[6], key[7]) \
 	TRANSFER(in, out)
 
-
-__global__
+__global__ __launch_bounds__(320, 2)
 void oldwhirlpool_gpu_hash_80(const uint32_t threads, const uint32_t startNounce, void *outputHash, int swab)
 {
 	__shared__ uint64_t sharedMemory[2048];
+	uint2 *shared = (uint2 *)sharedMemory;
+	uint2 *tab = (uint2 *)mixTob0Tox;
 
 	if (threadIdx.x < 256) {
-		sharedMemory[threadIdx.x] = mixTob0Tox[threadIdx.x];
-		#if USE_ALL_TABLES
-			sharedMemory[threadIdx.x+256]  = mixTob1Tox[threadIdx.x];
-			sharedMemory[threadIdx.x+512]  = mixTob2Tox[threadIdx.x];
-			sharedMemory[threadIdx.x+768]  = mixTob3Tox[threadIdx.x];
-			sharedMemory[threadIdx.x+1024] = mixTob4Tox[threadIdx.x];
-			sharedMemory[threadIdx.x+1280] = mixTob5Tox[threadIdx.x];
-			sharedMemory[threadIdx.x+1536] = mixTob6Tox[threadIdx.x];
-			sharedMemory[threadIdx.x+1792] = mixTob7Tox[threadIdx.x];
-		#endif
+		shared[threadIdx.x] = tab[threadIdx.x];
+#if USE_ALL_TABLES
+		shared[threadIdx.x + 256] = ROL8(tab[threadIdx.x]);
+		shared[threadIdx.x + 512] = ROL16(tab[threadIdx.x]);
+		shared[threadIdx.x + 768] = ROL24(tab[threadIdx.x]);
+		shared[threadIdx.x + 1024] = SWAPUINT2(tab[threadIdx.x]);
+		shared[threadIdx.x + 1280] = ROR24(tab[threadIdx.x]);
+		shared[threadIdx.x + 1536] = ROR16(tab[threadIdx.x]);
+		shared[threadIdx.x + 1792] = ROR8(tab[threadIdx.x]);
+#endif
 	}
 	//__threadfence_block(); // ensure shared mem is ready
-	__syncthreads();
 
 	uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	if (thread < threads)
@@ -2027,19 +2030,19 @@ void oldwhirlpool_gpu_hash_80(const uint32_t threads, const uint32_t startNounce
 
 #if HOST_MIDSTATE
 		uint64_t state[8];
-		#pragma unroll 8
-		for (int i=0; i < 8; i++) {
+#pragma unroll 8
+		for (int i = 0; i < 8; i++) {
 			//state[i] = c_PaddedMessage80[i];
 			AS_UINT2(&state[i]) = AS_UINT2(&c_PaddedMessage80[i]);
 		}
 #else
-		#pragma unroll 8
+#pragma unroll 8
 		for (int i=0; i<8; i++) {
 			n[i] = c_PaddedMessage80[i];  // read data
 			h[i] = 0;                     // read state
 		}
 
-		#pragma unroll 1
+#pragma unroll 1
 		for (unsigned r=0; r < 10; r++) {
 			uint64_t tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
 			ROUND_KSCHED(sharedMemory, h, tmp, InitVector_RC[r]);
@@ -2047,9 +2050,9 @@ void oldwhirlpool_gpu_hash_80(const uint32_t threads, const uint32_t startNounce
 		}
 
 		uint64_t state[8];
-		#pragma unroll 8
+#pragma unroll 8
 		for (int i=0; i < 8; i++) {
-			state[i] = xor1(n[i],c_PaddedMessage80[i]);
+			state[i] = xor1(n[i], c_PaddedMessage80[i]);
 		}
 #endif
 
@@ -2064,21 +2067,22 @@ void oldwhirlpool_gpu_hash_80(const uint32_t threads, const uint32_t startNounce
 		n[6] = 0;
 		n[7] = 0x8002000000000000;
 
-		#pragma unroll 8
-		for (int i=0; i<8; i++) {
+#pragma unroll 8
+		for (int i = 0; i<8; i++) {
 			h[i] = state[i];   //read state
-			n[i] = xor1(n[i],h[i]);
+			n[i] = xor1(n[i], h[i]);
 		}
+		__syncthreads();
 
-//		#pragma unroll
-		for (unsigned r=0; r < 10; r++) {
+		//		#pragma unroll
+		for (unsigned r = 0; r < 10; r++) {
 			uint64_t tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
 			ROUND_KSCHED(sharedMemory, h, tmp, InitVector_RC[r]);
 			ROUND_WENC(sharedMemory, n, h, tmp);
 		}
 
 		state[0] = xor3(state[0], n[0], c_PaddedMessage80[8]);
-		state[1] = xor3(state[1], n[1], REPLACE_HIDWORD(c_PaddedMessage80[9], nonce) );
+		state[1] = xor3(state[1], n[1], REPLACE_HIDWORD(c_PaddedMessage80[9], nonce));
 		state[2] = xor3(state[2], n[2], 0x0000000000000080);
 		state[3] = xor1(state[3], n[3]);
 		state[4] = xor1(state[4], n[4]);
@@ -2087,7 +2091,7 @@ void oldwhirlpool_gpu_hash_80(const uint32_t threads, const uint32_t startNounce
 		state[7] = xor3(state[7], n[7], 0x8002000000000000);
 
 		uint64_t* outHash = &(((uint64_t*)outputHash)[(size_t)8 * thread]);
-		#pragma unroll 8
+#pragma unroll 8
 		for (unsigned i = 0; i < 8; i++)
 			outHash[i] = state[i];
 

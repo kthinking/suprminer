@@ -1,14 +1,14 @@
 #include "x11/cuda_x11.h"
 
-extern void x11_echo512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x11_echo512_cpu_hash_64_sp(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void x11_luffa512_cpu_hash_64_alexis(int thr_id, uint32_t threads,uint32_t *d_hash);
-extern void x11_shavite512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_hash);
-extern void x13_fugue512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_hash);
-extern void x14_shabal512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x11_shavite512_cpu_hash_64_sp(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x13_fugue512_cpu_hash_64_sp(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x14_shabal512_cpu_hash_64_sp(int thr_id, uint32_t threads, uint32_t *d_hash);
 
 extern void x13_hamsi512_cpu_init(int thr_id, uint32_t threads);
 //extern void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNonce, uint32_t *d_nonceVector, uint32_t *d_hash, int order);
-extern void x13_hamsi512_cpu_hash_64_alexis(int thr_id, uint32_t threads, uint32_t *d_hash);
+extern void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 
 extern void x13_fugue512_cpu_init(int thr_id, uint32_t threads);
 extern void x13_fugue512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNonce, uint32_t *d_nonceVector, uint32_t *d_hash, int order);
@@ -52,20 +52,20 @@ void keccak512_cuda_hash_80(const int thr_id, const uint32_t threads, const uint
 void cubehash512_setBlock_80(int thr_id, uint32_t* endiandata);
 void cubehash512_cuda_hash_80(const int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash);
 
-void x11_shavite512_setBlock_80(void *pdata);
-void x11_shavite512_cpu_hash_80(int thr_id, uint32_t threads, uint32_t startNonce, uint32_t *d_hash, int order);
+void x16_shavite512_setBlock_80(void *pdata);
+void x16_shavite512_cpu_hash_80(int thr_id, uint32_t threads, uint32_t startNonce, uint32_t *d_hash, int order);
 
 void x16_shabal512_setBlock_80(void *pdata);
 void x16_shabal512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash);
 
 void x16_simd512_setBlock_80(void *pdata);
-void x16_simd512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash);
+void x16_simd512_cuda_hash_80_sp(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash);
 
 void x16_echo512_cuda_init(int thr_id, const uint32_t threads);
 void x16_echo512_setBlock_80(void *pdata);
 void x16_echo512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash);
 
-void x16_hamsi512_setBlock_80(void *pdata);
+void x16_hamsi512_setBlock_80(uint64_t *pdata);
 void x16_hamsi512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash);
 
 void x16_fugue512_cpu_init(int thr_id, uint32_t threads);

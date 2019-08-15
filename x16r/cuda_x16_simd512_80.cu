@@ -1,7 +1,8 @@
 /**
- * SIMD512 CUDA IMPLEMENTATION based on sph simd code
- * tpruvot 2018 (with the help of kernelx xevan code)
- */
+* SIMD512 CUDA IMPLEMENTATION based on sph simd code
+* tpruvot 2018 (with the help of kernelx xevan code)
+* Optimized by sp 2018 (+12% faster)
+*/
 
 #include <miner.h>
 #include <cuda_helper.h>
@@ -30,41 +31,43 @@ typedef int32_t  s32;
 #define XCAT_(x, y)   x ## y
 
 /*
- * The powers of 41 modulo 257. We use exponents from 0 to 255, inclusive.
- */
-__constant__ static const s32 alpha_tab[] = {
-    1,  41, 139,  45,  46,  87, 226,  14,  60, 147, 116, 130, 190,  80, 196,  69,
-    2,  82,  21,  90,  92, 174, 195,  28, 120,  37, 232,   3, 123, 160, 135, 138,
-    4, 164,  42, 180,  184,  91, 133, 56, 240,  74, 207,   6, 246,  63,  13,  19,
-    8,  71,  84, 103, 111, 182,   9, 112, 223, 148, 157,  12, 235, 126,  26,  38,
-   16, 142, 168, 206, 222, 107,  18, 224, 189,  39,  57,  24, 213, 252,  52,  76,
-   32,  27,  79, 155, 187, 214,  36, 191, 121,  78, 114,  48, 169, 247, 104, 152,
-   64,  54, 158,  53, 117, 171,  72, 125, 242, 156, 228,  96,  81, 237, 208,  47,
-  128, 108,  59, 106, 234,  85, 144, 250, 227,  55, 199, 192, 162, 217, 159,  94,
-  256, 216, 118, 212, 211, 170,  31, 243, 197, 110, 141, 127,  67, 177,  61, 188,
-  255, 175, 236, 167, 165,  83,  62, 229, 137, 220,  25, 254, 134,  97, 122, 119,
-  253,  93, 215,  77,  73, 166, 124, 201,  17, 183,  50, 251,  11, 194, 244, 238,
-  249, 186, 173, 154, 146,  75, 248, 145,  34, 109, 100, 245,  22, 131, 231, 219,
-  241, 115,  89,  51,  35, 150, 239,  33,  68, 218, 200, 233,  44,   5, 205, 181,
-  225, 230, 178, 102,  70,  43, 221,  66, 136, 179, 143, 209,  88,  10, 153, 105,
-  193, 203,  99, 204, 140,  86, 185, 132,  15, 101,  29, 161, 176,  20,  49, 210,
-  129, 149, 198, 151,  23, 172, 113,   7,  30, 202,  58,  65,  95,  40,  98, 163
+* The powers of 41 modulo 257. We use exponents from 0 to 255, inclusive.
+*/
+__constant__ static const uint16_t alpha_tab[] = {
+	1, 41, 139, 45, 46, 87, 226, 14, 60, 147, 116, 130, 190, 80, 196, 69,
+	2, 82, 21, 90, 92, 174, 195, 28, 120, 37, 232, 3, 123, 160, 135, 138,
+	4, 164, 42, 180, 184, 91, 133, 56, 240, 74, 207, 6, 246, 63, 13, 19,
+	8, 71, 84, 103, 111, 182, 9, 112, 223, 148, 157, 12, 235, 126, 26, 38,
+	16, 142, 168, 206, 222, 107, 18, 224, 189, 39, 57, 24, 213, 252, 52, 76,
+	32, 27, 79, 155, 187, 214, 36, 191, 121, 78, 114, 48, 169, 247, 104, 152,
+	64, 54, 158, 53, 117, 171, 72, 125, 242, 156, 228, 96, 81, 237, 208, 47,
+	128, 108, 59, 106, 234, 85, 144, 250, 227, 55, 199, 192, 162, 217, 159, 94,
+	256, 216, 118, 212, 211, 170, 31, 243, 197, 110, 141, 127, 67, 177, 61, 188,
+	255, 175, 236, 167, 165, 83, 62, 229, 137, 220, 25, 254, 134, 97, 122, 119,
+	253, 93, 215, 77, 73, 166, 124, 201, 17, 183, 50, 251, 11, 194, 244, 238,
+	249, 186, 173, 154, 146, 75, 248, 145, 34, 109, 100, 245, 22, 131, 231, 219,
+	241, 115, 89, 51, 35, 150, 239, 33, 68, 218, 200, 233, 44, 5, 205, 181,
+	225, 230, 178, 102, 70, 43, 221, 66, 136, 179, 143, 209, 88, 10, 153, 105,
+	193, 203, 99, 204, 140, 86, 185, 132, 15, 101, 29, 161, 176, 20, 49, 210,
+	129, 149, 198, 151, 23, 172, 113, 7, 30, 202, 58, 65, 95, 40, 98, 163
 };
 
+
+
 /*
- * Ranges:
- *   REDS1: from -32768..98302 to -383..383
- *   REDS2: from -2^31..2^31-1 to -32768..98302
- */
+* Ranges:
+*   REDS1: from -32768..98302 to -383..383
+*   REDS2: from -2^31..2^31-1 to -32768..98302
+*/
 #define REDS1(x) (((x) & 0x00FF) - ((x) >> 8))
 #define REDS2(x) (((x) & 0xFFFF) + ((x) >> 16))
 
 /*
- * If, upon entry, the values of q[] are all in the -N..N range (where
- * N >= 98302) then the new values of q[] are in the -2N..2N range.
- *
- * Since alpha_tab[v] <= 256, maximum allowed range is for N = 8388608.
- */
+* If, upon entry, the values of q[] are all in the -N..N range (where
+* N >= 98302) then the new values of q[] are in the -2N..2N range.
+*
+* Since alpha_tab[v] <= 256, maximum allowed range is for N = 8388608.
+*/
 #define FFT_LOOP_16_8(rb)   do { \
     s32 m = q[(rb)]; \
     s32 n = q[(rb) + 16]; \
@@ -319,7 +322,7 @@ __constant__ static const s32 alpha_tab[] = {
     t = REDS2(n * alpha_tab[112 + 3 * 4]); \
     q[(rb) + 28 + 3] = m + t; \
     q[(rb) + 28 + 3 + 32] = m - t; \
-  } while (0)
+	  } while (0)
 
 #define FFT_LOOP_64_2(rb)   do { \
     s32 m = q[(rb)]; \
@@ -657,7 +660,7 @@ __constant__ static const s32 alpha_tab[] = {
     t = REDS2(n * alpha_tab[120 + 3 * 2]); \
     q[(rb) + 60 + 3] = m + t; \
     q[(rb) + 60 + 3 + 64] = m - t; \
-  } while (0)
+	  } while (0)
 
 #define FFT_LOOP_128_1(rb)   do { \
     s32 m = q[(rb)]; \
@@ -1300,19 +1303,19 @@ __constant__ static const s32 alpha_tab[] = {
     t = REDS2(n * alpha_tab[124 + 3 * 1]); \
     q[(rb) + 124 + 3] = m + t; \
     q[(rb) + 124 + 3 + 128] = m - t; \
-  } while (0)
+	  } while (0)
 
 /*
- * Output ranges:
- *   d0:   min=    0   max= 1020
- *   d1:   min=  -67   max= 4587
- *   d2:   min=-4335   max= 4335
- *   d3:   min=-4147   max=  507
- *   d4:   min= -510   max=  510
- *   d5:   min= -252   max= 4402
- *   d6:   min=-4335   max= 4335
- *   d7:   min=-4332   max=  322
- */
+* Output ranges:
+*   d0:   min=    0   max= 1020
+*   d1:   min=  -67   max= 4587
+*   d2:   min=-4335   max= 4335
+*   d3:   min=-4147   max=  507
+*   d4:   min= -510   max=  510
+*   d5:   min= -252   max= 4402
+*   d6:   min=-4335   max= 4335
+*   d7:   min=-4332   max=  322
+*/
 #define FFT8(xb, xs, d)   do { \
     s32 x0 = x[(xb)]; \
     s32 x1 = x[(xb) + (xs)]; \
@@ -1334,14 +1337,14 @@ __constant__ static const s32 alpha_tab[] = {
     d ## 5 = a1 - b1; \
     d ## 6 = a2 - b2; \
     d ## 7 = a3 - b3; \
-  } while (0)
+	  } while (0)
 
 /*
- * When k=16, we have alpha=2. Multiplication by alpha^i is then reduced
- * to some shifting.
- *
- * Output: within -591471..591723
- */
+* When k=16, we have alpha=2. Multiplication by alpha^i is then reduced
+* to some shifting.
+*
+* Output: within -591471..591723
+*/
 #define FFT16(xb, xs, rb)   do { \
     s32 d1_0, d1_1, d1_2, d1_3, d1_4, d1_5, d1_6, d1_7; \
     s32 d2_0, d2_1, d2_2, d2_3, d2_4, d2_5, d2_6, d2_7; \
@@ -1363,29 +1366,29 @@ __constant__ static const s32 alpha_tab[] = {
     q[(rb) + 13] = d1_5 - (d2_5 << 5); \
     q[(rb) + 14] = d1_6 - (d2_6 << 6); \
     q[(rb) + 15] = d1_7 - (d2_7 << 7); \
-  } while (0)
+	  } while (0)
 
 /*
- * Output range: |q| <= 1183446
- */
+* Output range: |q| <= 1183446
+*/
 #define FFT32(xb, xs, rb, id)   do { \
     FFT16(xb, (xs) << 1, rb); \
     FFT16((xb) + (xs), (xs) << 1, (rb) + 16); \
     FFT_LOOP_16_8(rb); \
-  } while (0)
+	  } while (0)
 
 /*
- * Output range: |q| <= 2366892
- */
+* Output range: |q| <= 2366892
+*/
 #define FFT64(xb, xs, rb)   do { \
   FFT32(xb, (xs) << 1, (rb), label_a); \
   FFT32((xb) + (xs), (xs) << 1, (rb) + 32, label_b); \
   FFT_LOOP_32_4(rb); \
-  } while (0)
+	  } while (0)
 
 /*
- * Output range: |q| <= 9467568
- */
+* Output range: |q| <= 9467568
+*/
 #define FFT256(xb, xs, rb, id)   do { \
     FFT64((xb) + ((xs) * 0), (xs) << 2, (rb + 0)); \
     FFT64((xb) + ((xs) * 2), (xs) << 2, (rb + 64)); \
@@ -1394,38 +1397,39 @@ __constant__ static const s32 alpha_tab[] = {
     FFT64((xb) + ((xs) * 3), (xs) << 2, (rb + 192)); \
     FFT_LOOP_64_2((rb) + 128); \
     FFT_LOOP_128_1(rb); \
-  } while (0)
+	  } while (0)
 
 /*
- * beta^(255*i) mod 257
- */
+* beta^(255*i) mod 257
+*/
 __constant__ static const unsigned short yoff_b_n[] = {
-    1, 163,  98,  40,  95,  65,  58, 202,  30,   7, 113, 172,
-   23, 151, 198, 149, 129, 210,  49,  20, 176, 161,  29, 101,
-   15, 132, 185,  86, 140, 204,  99, 203, 193, 105, 153,  10,
-   88, 209, 143, 179, 136,  66, 221,  43,  70, 102, 178, 230,
-  225, 181, 205,   5,  44, 233, 200, 218,  68,  33, 239, 150,
-   35,  51,  89, 115, 241, 219, 231, 131,  22, 245, 100, 109,
-   34, 145, 248,  75, 146, 154, 173, 186, 249, 238, 244, 194,
-   11, 251,  50, 183,  17, 201, 124, 166,  73,  77, 215,  93,
-  253, 119, 122,  97, 134, 254,  25, 220, 137, 229,  62,  83,
-  165, 167, 236, 175, 255, 188,  61, 177,  67, 127, 141, 110,
-  197, 243,  31, 170, 211, 212, 118, 216, 256,  94, 159, 217,
-  162, 192, 199,  55, 227, 250, 144,  85, 234, 106,  59, 108,
-  128,  47, 208, 237,  81,  96, 228, 156, 242, 125,  72, 171,
-  117,  53, 158,  54,  64, 152, 104, 247, 169,  48, 114,  78,
-  121, 191,  36, 214, 187, 155,  79,  27,  32,  76,  52, 252,
-  213,  24,  57,  39, 189, 224,  18, 107, 222, 206, 168, 142,
-   16,  38,  26, 126, 235,  12, 157, 148, 223, 112,   9, 182,
-  111, 103,  84,  71,   8,  19,  13,  63, 246,   6, 207,  74,
-  240,  56, 133,  91, 184, 180,  42, 164,   4, 138, 135, 160,
-  123,   3, 232,  37, 120,  28, 195, 174,  92,  90,  21,  82,
-    2,  69, 196,  80, 190, 130, 116, 147,  60,  14, 226,  87,
-   46,  45, 139,  41
+	1, 163, 98, 40, 95, 65, 58, 202, 30, 7, 113, 172,
+	23, 151, 198, 149, 129, 210, 49, 20, 176, 161, 29, 101,
+	15, 132, 185, 86, 140, 204, 99, 203, 193, 105, 153, 10,
+	88, 209, 143, 179, 136, 66, 221, 43, 70, 102, 178, 230,
+	225, 181, 205, 5, 44, 233, 200, 218, 68, 33, 239, 150,
+	35, 51, 89, 115, 241, 219, 231, 131, 22, 245, 100, 109,
+	34, 145, 248, 75, 146, 154, 173, 186, 249, 238, 244, 194,
+	11, 251, 50, 183, 17, 201, 124, 166, 73, 77, 215, 93,
+	253, 119, 122, 97, 134, 254, 25, 220, 137, 229, 62, 83,
+	165, 167, 236, 175, 255, 188, 61, 177, 67, 127, 141, 110,
+	197, 243, 31, 170, 211, 212, 118, 216, 256, 94, 159, 217,
+	162, 192, 199, 55, 227, 250, 144, 85, 234, 106, 59, 108,
+	128, 47, 208, 237, 81, 96, 228, 156, 242, 125, 72, 171,
+	117, 53, 158, 54, 64, 152, 104, 247, 169, 48, 114, 78,
+	121, 191, 36, 214, 187, 155, 79, 27, 32, 76, 52, 252,
+	213, 24, 57, 39, 189, 224, 18, 107, 222, 206, 168, 142,
+	16, 38, 26, 126, 235, 12, 157, 148, 223, 112, 9, 182,
+	111, 103, 84, 71, 8, 19, 13, 63, 246, 6, 207, 74,
+	240, 56, 133, 91, 184, 180, 42, 164, 4, 138, 135, 160,
+	123, 3, 232, 37, 120, 28, 195, 174, 92, 90, 21, 82,
+	2, 69, 196, 80, 190, 130, 116, 147, 60, 14, 226, 87,
+	46, 45, 139, 41
 };
 
-#define INNER(l, h, mm)   (((u32)((l) * (mm)) & 0xFFFFU) \
-              + ((u32)((h) * (mm)) << 16))
+#define INNER(l, h, mm)   ((u32)(((uint16_t)l*(uint8_t)mm) & 0xFFFFU) \
+              + (u32)(((uint16_t)h*(uint8_t)mm) << 16))
+
 
 #define W_BIG(sb, o1, o2, mm) \
   (INNER(q[16 * (sb) + 2 * 0 + o1], q[16 * (sb) + 2 * 0 + o2], mm), \
@@ -1555,7 +1559,7 @@ __constant__ static const unsigned short yoff_b_n[] = {
     D ## n = C ## n; \
     C ## n = B ## n; \
     B ## n = tA ## n; \
-  } while (0)
+	  } while (0)
 
 #define STEP_BIG(w0, w1, w2, w3, w4, w5, w6, w7, fun, r, s, pp8b)   do { \
     u32 tA0 = ROL32(A0, r); \
@@ -1574,7 +1578,7 @@ __constant__ static const unsigned short yoff_b_n[] = {
     STEP_ELT(5, w5, fun, s, pp8b); \
     STEP_ELT(6, w6, fun, s, pp8b); \
     STEP_ELT(7, w7, fun, s, pp8b); \
-  } while (0)
+	  } while (0)
 
 #define SIMD_M3_0_0   0_
 #define SIMD_M3_1_0   1_
@@ -1658,16 +1662,16 @@ __constant__ static const unsigned short yoff_b_n[] = {
       MAJ, p2, p3, XCAT(PP8_, M7_6_ ## isp)); \
     STEP_BIG_(WB_ ## ri ## 7, \
       MAJ, p3, p0, XCAT(PP8_, M7_7_ ## isp)); \
-  } while (0)
+	  } while (0)
 
 //__constant__ static const s32 SIMD_Q_64[] = {
 //  4, 28, -80, -120, -47, -126, 45, -123, -92, -127, -70, 23, -23, -24, 40, -125, 101, 122, 34, -24, -119, 110, -121, -112, 32, 24, 51, 73, -117, -64, -21, 42, -60, 16, 5, 85, 107, 52, -44, -96, 42, 127, -18, -108, -47, 26, 91, 117, 112, 46, 87, 79, 126, -120, 65, -24, 121, 29, 118, -7, -53, 85, -98, -117, 32, 115, -47, -116, 63, 16, -108, 49, -119, 57, -110, 4, -76, -76, -42, -86, 58, 115, 4, 4, -83, -51, -37, 116, 32, 15, 36, -42, 73, -99, 94, 87, 60, -20, 67, 12, -76, 55, 117, -68, -82, -80, 93, -20, 92, -21, -128, -91, -11, 84, -28, 76, 94, -124, 37, 93, 17, -78, -106, -29, 88, -15, -47, 102, -4, -28, 80, 120, 47, 126, -45, 123, 92, 127, 70, -23, 23, 24, -40, 125, -101, -122, -34, 24, 119, -110, 121, 112, -32, -24, -51, -73, 117, 64, 21, -42, 60, -16, -5, -85, -107, -52, 44, 96, -42, -127, 18, 108, 47, -26, -91, -117, -112, -46, -87, -79, -126, 120, -65, 24, -121, -29, -118, 7, 53, -85, 98, 117, -32, -115, 47, 116, -63, -16, 108, -49, 119, -57, 110, -4, 76, 76, 42, 86, -58, -115, -4, -4, 83, 51, 37, -116, -32, -15, -36, 42, -73, 99, -94, -87, -60, 20, -67, -12, 76, -55, -117, 68, 82, 80, -93, 20, -92, 21, 128, 91, 11, -84, 28, -76, -94, 124, -37, -93, -17, 78, 106, 29, -88, 15, 47, -102
 //};
-__constant__ static const s32 SIMD_Q_80[] = {
+__constant__ static const short SIMD_Q_80[] = {
 	-125, -101, 48, 8, 81, 2, -84, 5, 36, 1, 58, -106, 105, 104, -89, 3, -28, -7, -95, 104, 9, -19, 7, 16, -97, -105, -78, -56, 11, 64, 107, -87, 68, -113, -124, -44, -22, -77, 84, 32, -87, -2, 110, 20, 81, -103, -38, -12, -17, -83, -42, -50, -3, 8, -64, 104, -8, -100, -11, 121, 75, -44, 30, 11, -97, -14, 81, 12, -66, -113, 20, -80, 9, -72, 18, -125, 52, 52, 86, 42, -71, -14, -125, -125, 45, 77, 91, -13, -97, -114, -93, 86, -56, 29, -35, -42, -69, 108, -62, -117, 52, -74, -12, 60, 46, 48, -36, 108, -37, 107, 0, 37, 117, -45, 100, -53, -35, 4, -92, -36, -112, 50, 22, 99, -41, 113, 81, -27, 124, 100, -49, -9, -82, -3, 83, -6, -37, -2, -59, 105, -106, -105, 88, -4, 27, 6, 94, -105, -10, 18, -8, -17, 96, 104, 77, 55, -12, -65, -108, 86, -69, 112, 123, 43, 21, 76, -85, -33, 86, 1, -111, -21, -82, 102, 37, 11, 16, 82, 41, 49, 2, -9, 63, -105, 7, 99, 10, -122, -76, 43, -31, -12, 96, 13, -82, -13, 65, 112, -21, 79, -10, 71, -19, 124, -53, -53, -87, -43, 70, 13, 124, 124, -46, -78, -92, 12, 96, 113, 92, -87, 55, -30, 34, 41, 68, -109, 61, 116, -53, 73, 11, -61, -47, -49, 35, -109, 36, -108, -1, -38, -118, 44, -101, 52, 34, -5, 91, 35, 111, -51, -23, -100, 40, -114, -82, 26
 };
 
-__constant__ static uint32_t c_PaddedMessage80[20];
+__constant__ static uint32_t c_PaddedMessage80[19];
 
 __host__
 void x16_simd512_setBlock_80(void *pdata)
@@ -1675,27 +1679,31 @@ void x16_simd512_setBlock_80(void *pdata)
 	cudaMemcpyToSymbol(c_PaddedMessage80, pdata, sizeof(c_PaddedMessage80), 0, cudaMemcpyHostToDevice);
 }
 
-#define TPB_SIMD 128
+#define TPB_SIMD 256
 __global__
-__launch_bounds__(TPB_SIMD,1)
-static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce, uint64_t *g_outputhash)
+__launch_bounds__(TPB_SIMD, 1)
+static void x16_simd512_gpu_80_sp(const uint32_t threads, const uint32_t startNonce, uint64_t *g_outputhash)
 {
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 	if (thread < threads)
 	{
+		const uint64_t hashPosition = thread;
+		uint32_t *Hash = (uint32_t*)(&g_outputhash[(size_t)8 * hashPosition]);
+
 		uint32_t A[20];
-		#pragma unroll 10
-		for (int i=0; i < 20; i += 2)
+#pragma unroll 10
+		for (int i = 0; i < 18; i += 2)
 			AS_UINT2(&A[i]) = AS_UINT2(&c_PaddedMessage80[i]);
 		A[19] = cuda_swab32(startNonce + thread);
+		A[18] = c_PaddedMessage80[18];
 
 		// simd
 		unsigned char x[128];
-		#pragma unroll
+#pragma unroll
 		for (int i = 0; i < 20; i += 2)
-			AS_UINT2(&x[i*4]) = AS_UINT2(&A[i]);
-		#pragma unroll
-		for(int i = 80; i < 128; i+=4) AS_U32(&x[i]) = 0;
+			AS_UINT2(&x[i * 4]) = AS_UINT2(&A[i]);
+#pragma unroll
+		for (int i = 80; i < 128; i += 4) AS_U32(&x[i]) = 0;
 
 		// SIMD_IV512
 		u32 A0 = 0x0BA16B95, A1 = 0x72F999AD, A2 = 0x9FECC2AE, A3 = 0xBA3264FC, A4 = 0x5E894929, A5 = 0x8E9F30E5, A6 = 0x2F1DAA37, A7 = 0xF0F2C558;
@@ -1706,8 +1714,9 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 		s32 q[256];
 		FFT256(0, 1, 0, ll1);
 
-		#pragma unroll
-		for (int i = 0; i < 256; i ++) {
+#pragma unroll 
+		for (int i = 0; i < 256; i++)
+		{
 			s32 tq = q[i] + yoff_b_n[i];
 			tq = REDS2(tq);
 			tq = REDS1(tq);
@@ -1715,16 +1724,16 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 			q[i] = (tq <= 128 ? tq : tq - 257);
 		}
 
-		A0 ^= A[ 0];
-		A1 ^= A[ 1];
-		A2 ^= A[ 2];
-		A3 ^= A[ 3];
-		A4 ^= A[ 4];
-		A5 ^= A[ 5];
-		A6 ^= A[ 6];
-		A7 ^= A[ 7];
-		B0 ^= A[ 8];
-		B1 ^= A[ 9];
+		A0 ^= A[0];
+		A1 ^= A[1];
+		A2 ^= A[2];
+		A3 ^= A[3];
+		A4 ^= A[4];
+		A5 ^= A[5];
+		A6 ^= A[6];
+		A7 ^= A[7];
+		B0 ^= A[8];
+		B1 ^= A[9];
 		B2 ^= A[10];
 		B3 ^= A[11];
 		B4 ^= A[12];
@@ -1736,15 +1745,15 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 		C2 ^= A[18];
 		C3 ^= A[19];
 
-		ONE_ROUND_BIG(0_, 0,  3, 23, 17, 27);
-		ONE_ROUND_BIG(1_, 1, 28, 19, 22,  7);
-		ONE_ROUND_BIG(2_, 2, 29,  9, 15,  5);
-		ONE_ROUND_BIG(3_, 3,  4, 13, 10, 25);
+		ONE_ROUND_BIG(0_, 0, 3, 23, 17, 27);
+		ONE_ROUND_BIG(1_, 1, 28, 19, 22, 7);
+		ONE_ROUND_BIG(2_, 2, 29, 9, 15, 5);
+		ONE_ROUND_BIG(3_, 3, 4, 13, 10, 25);
 
 		STEP_BIG(
 			C32(0x0BA16B95), C32(0x72F999AD), C32(0x9FECC2AE), C32(0xBA3264FC),
 			C32(0x5E894929), C32(0x8E9F30E5), C32(0x2F1DAA37), C32(0xF0F2C558),
-			IF,  4, 13, PP8_4_);
+			IF, 4, 13, PP8_4_);
 
 		STEP_BIG(
 			C32(0xAC506643), C32(0xA90635A5), C32(0xE25B878B), C32(0xAAB7878F),
@@ -1759,7 +1768,7 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 		STEP_BIG(
 			C32(0x09254899), C32(0xD699C7BC), C32(0x9019B6DC), C32(0x2B9022E4),
 			C32(0x8FA14956), C32(0x21BF9BD3), C32(0xB94D0943), C32(0x6FFDDC22),
-			IF, 25,  4, PP8_0_);
+			IF, 25, 4, PP8_0_);
 
 		// Second round
 
@@ -1768,19 +1777,21 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 		u32 COPY_C0 = C0, COPY_C1 = C1, COPY_C2 = C2, COPY_C3 = C3, COPY_C4 = C4, COPY_C5 = C5, COPY_C6 = C6, COPY_C7 = C7;
 		u32 COPY_D0 = D0, COPY_D1 = D1, COPY_D2 = D2, COPY_D3 = D3, COPY_D4 = D4, COPY_D5 = D5, COPY_D6 = D6, COPY_D7 = D7;
 
-		#define q SIMD_Q_80
+
+
+#define q SIMD_Q_80
 
 		A0 ^= 0x280; // bitlen
 
-		ONE_ROUND_BIG(0_, 0,  3, 23, 17, 27);
-		ONE_ROUND_BIG(1_, 1, 28, 19, 22,  7);
-		ONE_ROUND_BIG(2_, 2, 29,  9, 15,  5);
-		ONE_ROUND_BIG(3_, 3,  4, 13, 10, 25);
+		ONE_ROUND_BIG(0_, 0, 3, 23, 17, 27);
+		ONE_ROUND_BIG(1_, 1, 28, 19, 22, 7);
+		ONE_ROUND_BIG(2_, 2, 29, 9, 15, 5);
+		ONE_ROUND_BIG(3_, 3, 4, 13, 10, 25);
 
 		STEP_BIG(
 			COPY_A0, COPY_A1, COPY_A2, COPY_A3,
 			COPY_A4, COPY_A5, COPY_A6, COPY_A7,
-			IF,  4, 13, PP8_4_);
+			IF, 4, 13, PP8_4_);
 
 		STEP_BIG(
 			COPY_B0, COPY_B1, COPY_B2, COPY_B3,
@@ -1795,20 +1806,21 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 		STEP_BIG(
 			COPY_D0, COPY_D1, COPY_D2, COPY_D3,
 			COPY_D4, COPY_D5, COPY_D6, COPY_D7,
-			IF, 25,  4, PP8_0_);
+			IF, 25, 4, PP8_0_);
 
-		#undef q
+#undef q
 
-		A[ 0] = A0;
-		A[ 1] = A1;
-		A[ 2] = A2;
-		A[ 3] = A3;
-		A[ 4] = A4;
-		A[ 5] = A5;
-		A[ 6] = A6;
-		A[ 7] = A7;
-		A[ 8] = B0;
-		A[ 9] = B1;
+
+		A[0] = A0;
+		A[1] = A1;
+		A[2] = A2;
+		A[3] = A3;
+		A[4] = A4;
+		A[5] = A5;
+		A[6] = A6;
+		A[7] = A7;
+		A[8] = B0;
+		A[9] = B1;
 		A[10] = B2;
 		A[11] = B3;
 		A[12] = B4;
@@ -1816,10 +1828,8 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 		A[14] = B6;
 		A[15] = B7;
 
-		const uint64_t hashPosition = thread;
-		uint32_t *Hash = (uint32_t*)(&g_outputhash[(size_t)8 * hashPosition]);
-		#pragma unroll
-		for (int i=0; i < 16; i += 2)
+#pragma unroll
+		for (int i = 0; i < 16; i += 2)
 			*(uint2*)&Hash[i] = *(uint2*)&A[i];
 	}
 }
@@ -1827,10 +1837,10 @@ static void x16_simd512_gpu_80(const uint32_t threads, const uint32_t startNonce
 /***************************************************/
 
 __host__
-void x16_simd512_cuda_hash_80(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash)
+void x16_simd512_cuda_hash_80_sp(int thr_id, const uint32_t threads, const uint32_t startNonce, uint32_t *d_hash)
 {
-	const uint32_t tpb = 128;
+	const uint32_t tpb = TPB_SIMD;
 	const dim3 grid((threads + tpb - 1) / tpb);
 	const dim3 block(tpb);
-	x16_simd512_gpu_80 <<<grid, block>>> (threads, startNonce, (uint64_t*) d_hash);
+	x16_simd512_gpu_80_sp << <grid, block >> > (threads, startNonce, (uint64_t*)d_hash);
 }

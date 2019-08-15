@@ -1,10 +1,10 @@
-suprminer 1.1 (March 2018) optimized x16r algo without any dev fee.
+suprminer spmod-git (august 2018) optimized x16r algo without any dev fee.
 
-Most optimizations come from alexis, so please tip him (addr below)
+Most optimizations come from sp, so please tip him
 
 original README as follows:
 
-
+suprminer spmod-git (august 2018)                   "x16r algo" optimized
 
 ccminer 2.2.5 (Feb 2018)                            "x16r algo"
 ---------------------------------------------------------------
@@ -33,38 +33,7 @@ alexis:
 
 This is a CUDA accelerated mining application which handle :
 
-Decred (Blake256 14-rounds - 180 bytes)
-HeavyCoin & MjollnirCoin
-FugueCoin
-GroestlCoin & Myriad-Groestl
-Lbry Credits
-JackpotCoin (JHA)
-QuarkCoin family & AnimeCoin
-TalkCoin
-DarkCoin and other X11 coins
-Chaincoin and Flaxscript (C11)
-Saffroncoin blake (256 14-rounds)
-BlakeCoin (256 8-rounds)
-Qubit (Digibyte, ...)
-Luffa (Joincoin)
-Keccak (Maxcoin)
-Pentablake (Blake 512 x5)
-1Coin Triple S
-Neoscrypt (FeatherCoin)
-Revolver (X11evo)
-Scrypt and Scrypt:N
-Scrypt-Jane (Chacha)
-Sibcoin (sib)
-Skein (Skein + SHA)
-Signatum (Skein cubehash fugue Streebog)
-Tribus (JH, keccak, simd)
-Woodcoin (Double Skein)
-Vanilla (Blake256 8-rounds - double sha256)
-Vertcoin Lyra2RE
-Ziftrcoin (ZR5)
-Boolberry (Wild Keccak)
-Monero (Cryptonight)
-Aeon (Cryptonight-lite)
+c11,x16r,x16s,x17
 
 where some of these coins have a VERY NOTABLE nVidia advantage
 over competing AMD (OpenCL Only) implementations.
@@ -83,62 +52,10 @@ This code is based on the pooler cpuminer and inherits
 its command line interface and options.
 
   -a, --algo=ALGO       specify the algorithm to use
-                          bastion     use to mine Joincoin
-                          bitcore     use to mine Bitcore's Timetravel10
-                          blake       use to mine Saffroncoin (Blake256)
-                          blakecoin   use to mine Old Blake 256
-                          blake2s     use to mine Nevacoin (Blake2-S 256)
-                          bmw         use to mine Midnight
-                          cryptolight use to mine AEON cryptonight (MEM/2)
-                          cryptonight use to mine XMR cryptonight, Bytecoin, Dash, DigitalNote, etc
                           c11/flax    use to mine Chaincoin and Flax
-                          decred      use to mine Decred 180 bytes Blake256-14
-                          deep        use to mine Deepcoin
-                          dmd-gr      use to mine Diamond-Groestl
-                          equihash    use to mine ZEC, HUSH and KMD
-                          fresh       use to mine Freshcoin
-                          fugue256    use to mine Fuguecoin
-                          groestl     use to mine Groestlcoin
-                          hsr         use to mine Hshare
-                          jackpot     use to mine Sweepcoin
-                          keccak      use to mine Maxcoin
-                          keccakc     use to mine CreativeCoin
-                          lbry        use to mine LBRY Credits
-                          luffa       use to mine Joincoin
-                          lyra2       use to mine CryptoCoin
-                          lyra2v2     use to mine Vertcoin
-                          lyra2z      use to mine Zerocoin (XZC)
-                          myr-gr      use to mine Myriad-Groest
-                          neoscrypt   use to mine FeatherCoin, Trezarcoin, Orbitcoin, etc
-                          nist5       use to mine TalkCoin
-                          penta       use to mine Joincoin / Pentablake
-                          phi         use to mine LUXCoin
-                          polytimos   use to mine Polytimos
-                          quark       use to mine Quarkcoin
-                          qubit       use to mine Qubit
-                          scrypt      use to mine Scrypt coins (Litecoin, Dogecoin, etc)
-                          scrypt:N    use to mine Scrypt-N (:10 for 2048 iterations)
-                          scrypt-jane use to mine Chacha coins like Cache and Ultracoin
-                          s3          use to mine 1coin (ONE)
-                          sha256t     use to mine OneCoin (OC)
-                          sia         use to mine SIA
-                          sib         use to mine Sibcoin
-                          skein       use to mine Skeincoin
-                          skein2      use to mine Woodcoin
-                          skunk       use to mine Signatum
-                          timetravel  use to mine MachineCoin
-                          tribus      use to mine Denarius
-                          x11evo      use to mine Revolver
-                          x11         use to mine DarkCoin
-                          x14         use to mine X14Coin
-                          x15         use to mine Halcyon
+                          x16r        use to mine Pigeon
                           x16r        use to mine Raven
                           x17         use to mine X17
-                          vanilla     use to mine Vanilla (Blake256)
-                          veltor      use to mine VeltorCoin
-                          whirlpool   use to mine Joincoin
-                          wildkeccak  use to mine Boolberry (Stratum only)
-                          zr5         use to mine ZiftrCoin
 
   -d, --devices         gives a comma separated list of CUDA device IDs
                         to operate on. Device IDs start counting from 0!

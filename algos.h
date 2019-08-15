@@ -126,7 +126,7 @@ static const char *algo_names[] = {
 	"tribus",
 	"bitcore",
 	"x11evo",
-	"x11",
+	"xdna",
 	"x13",
 	"x14",
 	"x15",
