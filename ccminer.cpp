@@ -238,6 +238,7 @@ Options:\n\
   -a, --algo=ALGO       specify the hash algorithm to use\n\
 			c11/flax    X11 variant\n\
 			x16r        X16R (Raven)\n\
+			x16rv2      X16RV2 (Raven after 1-october-2019)\n\
 			x16s	    X16S (Pidgeon)\n\
 			x17			X17 (Verge)\n\
   -d, --devices         Comma separated list of CUDA devices to use.\n\
@@ -1653,6 +1654,7 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 		case ALGO_TIMETRAVEL:
 		case ALGO_BITCORE:
 		case ALGO_X16R:
+		case ALGO_X16RV2:
 		case ALGO_X16S:
 			work_set_target(work, sctx->job.diff / (256.0 * opt_difficulty));
 			break;
@@ -2467,7 +2469,10 @@ static void *miner_thread(void *userdata)
 			rc = scanhash_x15(thr_id, &work, max_nonce, &hashes_done);
 			break;
 */		case ALGO_X16R:
-		rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
+			rc = scanhash_x16r(thr_id, &work, max_nonce, &hashes_done);
+			break;
+		case ALGO_X16RV2:
+			rc = scanhash_x16rv2(thr_id, &work, max_nonce, &hashes_done);
 			break;
         case ALGO_X16S:
             rc = scanhash_x16s(thr_id, &work, max_nonce, &hashes_done);

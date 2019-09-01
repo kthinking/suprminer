@@ -115,6 +115,9 @@
     <Filter Include="Source Files\CUDA\tribus">
       <UniqueIdentifier>{1e548d79-c217-4203-989a-a592fe2b2de3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\CUDA\x16rv2">
+      <UniqueIdentifier>{40ec2544-8447-4a03-8dbf-42864c03255b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="compat\jansson\dump.c">
@@ -350,6 +353,9 @@
     </ClCompile>
     <ClCompile Include="equi\blake2\blake2bx.cpp">
       <Filter>Source Files\equi</Filter>
+    </ClCompile>
+    <ClCompile Include="sph\tiger.c">
+      <Filter>Source Files\sph</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -1017,6 +1023,13 @@
     </CudaCompile>
     <CudaCompile Include="x13\cuda_x13_hamsi512_sp.cu">
       <Filter>Source Files\CUDA\x13</Filter>
+    </CudaCompile>
+    <CudaCompile Include="neoscrypt\cuda_neoscrypt.cu" />
+    <CudaCompile Include="x16r\x16rv2.cu">
+      <Filter>Source Files\CUDA\x16r</Filter>
+    </CudaCompile>
+    <CudaCompile Include="x16rv2\cuda_tiger192.cu">
+      <Filter>Source Files\CUDA\x16rv2</Filter>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>

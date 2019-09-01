@@ -1,7 +1,7 @@
 /**
  * X17 algorithm (X15 + sha512 + haval256)
  */
-
+#include <unistd.h>
 extern "C" {
 #include "sph/sph_blake.h"
 #include "sph/sph_bmw.h"
@@ -230,7 +230,7 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 			// reduce cpu usage
 			cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
 		}
-		gpulog(LOG_INFO, thr_id, "Intensity set to %g, %u cuda threads", throughput2intensity(throughput), throughput);
+		gpulog(LOG_INFO, thr_id, "%s Intensity: %g ", device_name[dev_id], throughput2intensity(throughput));
 
 		quark_blake512_cpu_init(thr_id, throughput);
 		quark_groestl512_cpu_init(thr_id, throughput);
