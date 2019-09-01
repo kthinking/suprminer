@@ -1,6 +1,6 @@
 # ccminer
 
-suprminer sp-mod (august 2018) optimized x16r algo without any dev fee.
+suprminer sp-mod (september 2019) optimized x16r/x16rv2/x17 algo without any dev fee.
 
 Most optimizations come from sp, so please support him.
 

@@ -1,10 +1,10 @@
-suprminer spmod-git (august 2018) optimized x16r algo without any dev fee.
+suprminer spmod-git (september 2019) optimized x16r/x16rv2/x17 algo without any dev fee.
 
 Most optimizations come from sp, so please tip him
 
 original README as follows:
 
-suprminer spmod-git (august 2018)                   "x16r algo" optimized
+suprminer spmod-git (september 2019)                   "x16r algo" optimized
 
 ccminer 2.2.5 (Feb 2018)                            "x16r algo"
 ---------------------------------------------------------------
