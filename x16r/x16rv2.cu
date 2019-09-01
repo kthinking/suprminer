@@ -197,7 +197,7 @@ extern "C" void x16rv2_hash(void *output, const void *input)
 			sph_tiger_close(&ctx_tiger, hash);
 			memset(hash + 24, 0, 40);
 			sph_keccak512_init(&ctx_keccak);
-			sph_keccak512(&ctx_keccak, in, size);
+			sph_keccak512(&ctx_keccak, in, 64);
 			sph_keccak512_close(&ctx_keccak, hash);
 			break;
 		case LUFFA:
@@ -206,7 +206,7 @@ extern "C" void x16rv2_hash(void *output, const void *input)
 			sph_tiger_close(&ctx_tiger, hash);
 			memset(hash + 24, 0, 40);
 			sph_luffa512_init(&ctx_luffa);
-			sph_luffa512(&ctx_luffa, in, size);
+			sph_luffa512(&ctx_luffa, in, 64);
 			sph_luffa512_close(&ctx_luffa, hash);
 			break;
 		case CUBEHASH:
@@ -255,7 +255,7 @@ extern "C" void x16rv2_hash(void *output, const void *input)
 			sph_tiger_close(&ctx_tiger, hash);
 			memset(hash + 24, 0, 40);
 			sph_sha512_init(&ctx_sha512);
-			sph_sha512(&ctx_sha512,(const void*) in, size);
+			sph_sha512(&ctx_sha512,(const void*) in, 64);
 			sph_sha512_close(&ctx_sha512,(void*) hash);
 			break;
 		}
@@ -296,8 +296,10 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 
 	if (opt_benchmark) {
 		((uint32_t*)ptarget)[7] = 0x00f;
-		((uint32_t*)pdata)[1] = 0xFEDCBA98;
-		((uint32_t*)pdata)[2] = 0x76543210;
+//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
+//		((uint32_t*)pdata)[2] = 0x76543210;
+		((uint32_t*)pdata)[1] = 0x66666666;
+		((uint32_t*)pdata)[2] = 0x66666666;
 
 		//		94E3A654 CBD9B14B
 
@@ -647,7 +649,7 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 				}
 				break;
 			case LUFFA:
-				if (i == 15)
+/*				if (i == 15)
 				{
 					tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
 					x11_luffa512_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], ((uint64_t *)ptarget)[3], d_resNonce[thr_id]);
@@ -655,11 +657,12 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 					work->nonces[0] = h_resNonce[thr_id][0];
 					addstart = true;
 				}
-				else
-				{
+*/
+//				else
+//				{
 					tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
 					x11_luffa512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
-				}
+//				}
 				break;
 			case CUBEHASH:
 				if (nextalgo == SHAVITE)
