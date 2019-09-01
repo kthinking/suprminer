@@ -342,7 +342,7 @@ extern "C" int scanhash_x16s(int thr_id, struct work* work, uint32_t max_nonce, 
 		default_throughput = 1 << 20;
 		splitsimd = false;
 	}
-	else if ((strstr(device_name[dev_id], "1070")) || (strstr(device_name[dev_id], "P104")))
+	else if ((strstr(device_name[dev_id], "166")) || (strstr(device_name[dev_id], "20")) || (strstr(device_name[dev_id], "1070")) || (strstr(device_name[dev_id], "P104")))
 	{
 		default_throughput = (1 << 24); //53686272; //1 << 20
 		merge = true;

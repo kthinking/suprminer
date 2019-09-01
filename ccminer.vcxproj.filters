@@ -898,9 +898,6 @@
     <CudaCompile Include="scrypt\titan_kernel.cu">
       <Filter>Source Files\CUDA\scrypt</Filter>
     </CudaCompile>
-    <CudaCompile Include="neoscrypt\cuda_neoscrypt.cu">
-      <Filter>Source Files\neoscrypt</Filter>
-    </CudaCompile>
     <CudaCompile Include="Algo256\bmw.cu">
       <Filter>Source Files\CUDA\Algo256</Filter>
     </CudaCompile>

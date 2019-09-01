@@ -294,8 +294,8 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		((uint32_t*)ptarget)[7] = 0x00f;
 		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 		//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0x88888888;
-		((uint32_t*)pdata)[2] = 0x88888888;
+		((uint32_t*)pdata)[1] = 0x99999999;
+		((uint32_t*)pdata)[2] = 0x99999999;
 
 		//		94E3A654 CBD9B14B
 
@@ -360,7 +360,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		default_throughput = 1 << 20;
 		splitsimd = false;
 	}
-	else if ((strstr(device_name[dev_id], "1070")) || (strstr(device_name[dev_id], "P104")))
+	else if ((strstr(device_name[dev_id], "166")) || (strstr(device_name[dev_id], "20")) || (strstr(device_name[dev_id], "1070")) || (strstr(device_name[dev_id], "P104")))
 	{
 		default_throughput = (1 << 24); //53686272; //1 << 20
 		merge = true;
