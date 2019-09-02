@@ -177,7 +177,6 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 	uint32_t default_throughput = 1 << 19;
 	bool splitsimd = true;
 	bool merge = false;
-	uint32_t whirpoolindex = 15; //andmask 0,1,3,7 or 15
 	if ((strstr(device_name[dev_id], "1060")) || (strstr(device_name[dev_id], "P106")))
 	{
 		default_throughput = (1 << 21);
@@ -212,7 +211,6 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 	{
 		default_throughput = (1 << 24); //53686272; //1 << 20
 		merge = true;
-		whirpoolindex = 0;
 	}
 	else if(strstr(device_name[dev_id], "1070") || (strstr(device_name[dev_id], "P104")))
 	{
@@ -297,8 +295,8 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 		quark_jh512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
 		quark_keccak512_cpu_hash_64(thr_id, throughput, NULL, d_hash[thr_id]); order++;
 		x11_luffa512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
-		//	x11_cubehash512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
-		//	x11_shavite512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]); order++;
+		//x11_cubehash512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
+		//x11_shavite512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]); order++;
 		x11_cubehash_shavite512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
 
 		if (!splitsimd)

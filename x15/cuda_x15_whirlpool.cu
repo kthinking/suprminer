@@ -61,14 +61,14 @@ void TRANSFER(uint2 *const __restrict__ dst, const uint2 *const __restrict__ src
 
 __device__ __forceinline__ uint2 d_ROUND_ELT(const uint32_t index,const uint2 sharedMemory[256][16], const uint2 *const __restrict__ in, const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7){
 
-	uint2 ret = sharedMemory[__byte_perm(in[i0].x, 0, 0x4440)][threadIdx.x & index];  //__ldg((uint2*)&b0[__byte_perm(in[i0].x, 0, 0x4440)]);
+	uint2 ret = sharedMemory[__byte_perm(in[i0].x, 0, 0x4440)][threadIdx.x & index];
 	ret ^= ROL8(sharedMemory[__byte_perm(in[i1].x, 0, 0x4441)][threadIdx.x & index]);
 	ret ^= ROL16(sharedMemory[__byte_perm(in[i2].x, 0, 0x4442)][threadIdx.x &index]);
 	ret ^= ROL24(sharedMemory[__byte_perm(in[i3].x, 0, 0x4443)][threadIdx.x &index]);
 	ret ^= SWAPUINT2(sharedMemory[__byte_perm(in[i4].y, 0, 0x4440)][threadIdx.x &index]);
 	ret ^= ROR24(sharedMemory[__byte_perm(in[i5].y, 0, 0x4441)][threadIdx.x &index]);
-	ret ^= ROR16(sharedMemory[__byte_perm(in[i6].y, 0, 0x4442)][threadIdx.x &index]); //ROR8(__ldg((uint2*)&b7[__byte_perm(in[i6].y, 0, 0x4442)]));
-	ret ^= ROR8(sharedMemory[__byte_perm(in[i7].y, 0, 0x4443)][threadIdx.x &index]); //__ldg((uint2*)&b7[__byte_perm(in[i7].y, 0, 0x4443)]);
+	ret ^= ROR16(sharedMemory[__byte_perm(in[i6].y, 0, 0x4442)][threadIdx.x &index]);
+	ret ^= ROR8(sharedMemory[__byte_perm(in[i7].y, 0, 0x4443)][threadIdx.x &index]);
 	return ret;
 }
 
@@ -80,8 +80,8 @@ uint2 d_ROUND_ELT1(const uint32_t index,const uint2 sharedMemory[256][16], const
 	ret ^= ROL24(sharedMemory[__byte_perm(in[i3].x, 0, 0x4443)][threadIdx.x & index]);
 	ret ^= SWAPUINT2(sharedMemory[__byte_perm(in[i4].y, 0, 0x4440)][threadIdx.x & index]);
 	ret ^= ROR24(sharedMemory[__byte_perm(in[i5].y, 0, 0x4441)][threadIdx.x & index]);
-	ret ^= ROR16(sharedMemory[__byte_perm(in[i6].y, 0, 0x4442)][threadIdx.x & index]);//sharedMemory[6][__byte_perm(in[i6].y, 0, 0x4442)]
-	ret ^= ROR8(sharedMemory[__byte_perm(in[i7].y, 0, 0x4443)][threadIdx.x & index]);//sharedMemory[7][__byte_perm(in[i7].y, 0, 0x4443)]
+	ret ^= ROR16(sharedMemory[__byte_perm(in[i6].y, 0, 0x4442)][threadIdx.x & index]);
+	ret ^= ROR8(sharedMemory[__byte_perm(in[i7].y, 0, 0x4443)][threadIdx.x & index]);
 	ret ^= c0;
 	return ret;
 }
@@ -122,7 +122,7 @@ void x15_whirlpool_gpu_hash_64(uint32_t threads, uint64_t *g_hash)
 	if (threadIdx.x < 256)
 	{
 		const uint2 tmp = b0[threadIdx.x];
-		sharedMemory[threadIdx.x][0] = tmp;
+		sharedMemory[threadIdx.x][0] = tmp ;
 		sharedMemory[threadIdx.x][1] = tmp;
 		sharedMemory[threadIdx.x][2] = tmp;
 		sharedMemory[threadIdx.x][3] = tmp;
@@ -138,6 +138,7 @@ void x15_whirlpool_gpu_hash_64(uint32_t threads, uint64_t *g_hash)
 		sharedMemory[threadIdx.x][13] = tmp;
 		sharedMemory[threadIdx.x][14] = tmp;
 		sharedMemory[threadIdx.x][15] = tmp;
+
 	}
 
 	const uint32_t index = 15; //sharedindex;
@@ -168,6 +169,8 @@ void x15_whirlpool_gpu_hash_64(uint32_t threads, uint64_t *g_hash)
 		tmp[5] ^= d_ROUND_ELT(index, sharedMemory, n, 5, 4, 3, 2, 1, 0, 7, 6);
 		tmp[6] ^= d_ROUND_ELT(index, sharedMemory, n, 6, 5, 4, 3, 2, 1, 0, 7);
 		tmp[7] ^= d_ROUND_ELT(index, sharedMemory, n, 7, 6, 5, 4, 3, 2, 1, 0);
+
+		//#pragma unroll
 		for (int i = 1; i <10; i++)
 		{
 			TRANSFER(n, tmp);
@@ -198,7 +201,7 @@ void x15_whirlpool_gpu_hash_64(uint32_t threads, uint64_t *g_hash)
 			n[i] = n[i] ^ h[i];
 		}
 
-		//#pragma unroll 2
+		#pragma unroll
 		for (int i = 0; i < 10; i++)
 		{
 			tmp[0] = InitVector_RC[i];
