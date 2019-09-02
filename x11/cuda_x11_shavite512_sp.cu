@@ -124,50 +124,6 @@ void aes_gpu_init256_s(uint32_t sharedMemory[256][32])
 	sharedMemory[threadIdx.x][29] = temp;
 	sharedMemory[threadIdx.x][30] = temp;
 	sharedMemory[threadIdx.x][31] = temp;
-	
-/*	sharedMemory[(threadIdx.x << 1) + 0][0] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][1] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][2] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][3] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][4] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][5] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][6] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][7] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][8] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][9] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][10] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][11] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][12] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][13] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][14] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][15] = temp.x;
-	sharedMemory[(threadIdx.x << 1) + 0][16] = temp.x;
-
-	sharedMemory[(threadIdx.x << 1) + 1][0] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][1] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][2] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][3] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][4] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][5] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][6] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][7] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][8] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][9] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][10] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][11] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][12] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][13] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][14] = temp.y;
-	sharedMemory[(threadIdx.x << 1) + 1][15] = temp.y;
-*/
-	
-	/*	sharedMemory[1][(threadIdx.x << 1) + 0] = ROL8(temp.x);
-	sharedMemory[1][(threadIdx.x << 1) + 1] = ROL8(temp.y);
-	sharedMemory[2][(threadIdx.x << 1) + 0] = ROL16(temp.x);
-	sharedMemory[2][(threadIdx.x << 1) + 1] = ROL16(temp.y);
-	sharedMemory[3][(threadIdx.x << 1) + 0] = ROR8(temp.x);
-	sharedMemory[3][(threadIdx.x << 1) + 1] = ROR8(temp.y);
-*/
 }
 
 
@@ -1015,10 +971,9 @@ void x11_shavite512_gpu_hash_64_sp_final(const uint32_t threads, uint64_t *g_has
 __host__
 void x11_shavite512_cpu_hash_64_sp(int thr_id, uint32_t threads, uint32_t *d_hash)
 {
-	dim3 grid((threads + 384 - 1) / 384);
-	dim3 block(384);
+	dim3 grid((threads + 256 - 1) / 256);
+	dim3 block(256);
 
-	// note: 128 threads minimum are required to init the shared memory array
 	x11_shavite512_gpu_hash_64_sp<<<grid, block>>>(threads, (uint64_t*)d_hash);
 }
 
@@ -1028,6 +983,5 @@ void x11_shavite512_cpu_hash_64_sp_final(int thr_id, uint32_t threads, uint32_t 
 	dim3 grid((threads + 384 - 1) / 384);
 	dim3 block(384);
 
-	// note: 128 threads minimum are required to init the shared memory array
 	x11_shavite512_gpu_hash_64_sp_final << <grid, block >> >(threads, (uint64_t*)d_hash,resNonce,target);
 }

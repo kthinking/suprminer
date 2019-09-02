@@ -201,7 +201,7 @@ void x15_whirlpool_gpu_hash_64(uint32_t threads, uint64_t *g_hash)
 			n[i] = n[i] ^ h[i];
 		}
 
-		#pragma unroll
+//		#pragma unroll
 		for (int i = 0; i < 10; i++)
 		{
 			tmp[0] = InitVector_RC[i];
