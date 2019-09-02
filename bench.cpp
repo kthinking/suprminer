@@ -94,7 +94,6 @@ void algo_free_all(int thr_id)
 	free_s3(thr_id);
 	free_vanilla(thr_id);
 	free_veltor(thr_id);
-	free_whirl(thr_id);
 	//free_whirlx(thr_id);
 	free_wildkeccak(thr_id);
 	free_x11evo(thr_id);

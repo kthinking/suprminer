@@ -2304,9 +2304,6 @@ void print_hash_tests(void)
 	veltorhash(&hash[0], &buf[0]);
 	printpfx("veltor", hash);
 
-	wcoinhash(&hash[0], &buf[0]);
-	printpfx("whirlpool", hash);
-
 	//whirlxHash(&hash[0], &buf[0]);
 	//printpfx("whirlpoolx", hash);
 

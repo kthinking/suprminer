@@ -199,7 +199,7 @@
       <MaxRegCount>80</MaxRegCount>
       <PtxAsOptionV>true</PtxAsOptionV>
       <Keep>true</Keep>
-      <CodeGeneration>compute_61,sm_61;compute_52,sm_52;compute_50,sm_50</CodeGeneration>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
       <Include>$(NVTOOLSEXT_PATH)\include</Include>
       <Optimization>O3</Optimization>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -442,9 +442,9 @@
     <CudaCompile Include="x13\cuda_x13_fugue512_sp.cu" />
     <CudaCompile Include="x13\cuda_x13_hamsi512_sp.cu" />
     <CudaCompile Include="x15\cuda_x14_shabal512_sp.cu" />
-    <CudaCompile Include="x15\cuda_x15_whirlpool_sm3.cu" />
     <CudaCompile Include="x16rv2\cuda_tiger192.cu" />
     <CudaCompile Include="x16r\cuda_x16_shavite512.cu" />
+    <CudaCompile Include="x16r\cuda_x16_whirlpool.cu" />
     <CudaCompile Include="x16r\x16r.cu" />
     <CudaCompile Include="x16r\x16rv2.cu" />
     <CudaCompile Include="x16r\x16s.cu" />
@@ -607,7 +607,6 @@
     <CudaCompile Include="x15\cuda_x15_whirlpool.cu" />
     <CudaCompile Include="x17\hmq17.cu" />
     <CudaCompile Include="x15\x15.cu" />
-    <CudaCompile Include="x15\whirlpool.cu" />
     <CudaCompile Include="x17\x17.cu" />
     <CudaCompile Include="x17\cuda_x17_haval256.cu">
     </CudaCompile>

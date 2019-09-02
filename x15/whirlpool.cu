@@ -58,7 +58,7 @@ extern "C" void wcoinhash(void *state, const void *input)
 	memcpy(state, hash, 32);
 }
 
-void whirl_midstate(void *state, const void *input)
+/*void whirl_midstate(void *state, const void *input)
 {
 	sph_whirlpool_context ctx;
 
@@ -67,6 +67,7 @@ void whirl_midstate(void *state, const void *input)
 
 	memcpy(state, ctx.state, 64);
 }
+*/
 
 static bool init[MAX_GPUS] = { 0 };
 

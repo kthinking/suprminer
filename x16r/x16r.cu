@@ -291,11 +291,13 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 */
 
 	if (opt_benchmark) {
-		((uint32_t*)ptarget)[7] = 0x00f;
-		//		((uint32_t*)pdata)[1] = 0xFEDCBA98;
-		//		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0x99999999;
-		((uint32_t*)pdata)[2] = 0x99999999;
+		((uint32_t*)ptarget)[7] = 0x0ff;
+//		((uint32_t*)pdata)[1] = 0xF9E9EA98;
+//		((uint32_t*)pdata)[2] = 0x76543210;
+//		((uint32_t*)pdata)[1] = 0x99999999;
+//		((uint32_t*)pdata)[2] = 0x99999999;
+		((uint32_t*)pdata)[1] = 0xE9E9E9E9;
+		((uint32_t*)pdata)[2] = 0xE9E9E9E9;
 
 		//		94E3A654 CBD9B14B
 
@@ -360,7 +362,12 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		default_throughput = 1 << 20;
 		splitsimd = false;
 	}
-	else if ((strstr(device_name[dev_id], "166")) || (strstr(device_name[dev_id], "20")) || (strstr(device_name[dev_id], "1070")) || (strstr(device_name[dev_id], "P104")))
+	else if ((strstr(device_name[dev_id], "166")) || (strstr(device_name[dev_id], "20")))
+	{
+		default_throughput = (1 << 24); //53686272; //1 << 20
+		merge = true;
+	}
+	else if (strstr(device_name[dev_id], "1070") || (strstr(device_name[dev_id], "P104")))
 	{
 		default_throughput = (1 << 24); //53686272; //1 << 20
 		merge = true;
@@ -413,7 +420,6 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 		x16_fugue512_cpu_init(thr_id, throughput);
 		x15_whirlpool_cpu_init(thr_id, throughput, 0);
 		x16_whirlpool512_init(thr_id, throughput);
-
 
 		x11_luffa512_cpu_init(thr_id, throughput); // 64
 		x16_echo512_cuda_init(thr_id, throughput);
@@ -688,12 +694,12 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 					{
 						x16_simd_echo512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 						i = i + 1;
-					}
+					}/*
 					else if (nextalgo == WHIRLPOOL)
 					{
 						x16_simd_whirlpool512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 						i = i + 1;
-					}
+					}*/
 					else if (nextalgo == HAMSI)
 					{
 						x16_simd_hamsi512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
@@ -729,14 +735,14 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 						}
 						i = i + 1;
 					}
-					else if (nextalgo == WHIRLPOOL)
+					/*else if (nextalgo == WHIRLPOOL)
 					{
 						for (int j = 0; j < 256; j += 16)
 						{
 							x16_simd_whirlpool512_cpu_hash_64(thr_id, throughput >> 4, d_hash[thr_id] + (((throughput / 4)*j) / (sizeof(int))));
 						}
 						i = i + 1;
-					}
+					}*/
 					else if (nextalgo == HAMSI)
 					{
 						for (int j = 0; j < 256; j += 16)
@@ -826,7 +832,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				}
 				else
 				{
-					x15_whirlpool_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+					x15_whirlpool_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 				}
 				break;
 			case SHA512:

@@ -19,12 +19,11 @@ __device__ __forceinline__ uint32_t xor3(uint32_t a, uint32_t b, uint32_t c)
 	return a;
 }
 //--------START OF WHIRLPOOL DEVICE MACROS---------------------------------------------------------------------------
-__device__ static uint64_t b0[256];
-__device__ static uint64_t b7[256];
+__constant__ static uint2 b0[256];
 
 __constant__ static uint2 precomputed_round_key_64[72];
 
-__device__ uint2 InitVector_RC[10];
+__constant__ uint2 InitVector_RC[10];
 
 __device__ __forceinline__
 void static TRANSFER(uint2 *const __restrict__ dst, const uint2 *const __restrict__ src){
@@ -38,62 +37,32 @@ void static TRANSFER(uint2 *const __restrict__ dst, const uint2 *const __restric
 	dst[7] = src[7];
 }
 
-__device__ __forceinline__
-static uint2 d_ROUND_ELT_LDG(const uint2 sharedMemory[7][256], const uint2 *const __restrict__ in, const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7){
-	uint2 ret = __ldg((uint2*)&b0[__byte_perm(in[i0].x, 0, 0x4440)]);
-	ret ^= sharedMemory[1][__byte_perm(in[i1].x, 0, 0x4441)];
-	ret ^= sharedMemory[2][__byte_perm(in[i2].x, 0, 0x4442)];
-	ret ^= sharedMemory[3][__byte_perm(in[i3].x, 0, 0x4443)];
-	ret ^= sharedMemory[4][__byte_perm(in[i4].y, 0, 0x4440)];
-	ret ^= ROR24(__ldg((uint2*)&b0[__byte_perm(in[i5].y, 0, 0x4441)]));
-	ret ^= ROR8(__ldg((uint2*)&b7[__byte_perm(in[i6].y, 0, 0x4442)]));
-	ret ^= __ldg((uint2*)&b7[__byte_perm(in[i7].y, 0, 0x4443)]);
+__device__ __forceinline__ uint2 d_ROUND_ELT(const uint32_t index, const uint2 sharedMemory[256][16], const uint2 *const __restrict__ in, const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7){
+
+	uint2 ret = sharedMemory[__byte_perm(in[i0].x, 0, 0x4440)][threadIdx.x & index];  //__ldg((uint2*)&b0[__byte_perm(in[i0].x, 0, 0x4440)]);
+	ret ^= ROL8(sharedMemory[__byte_perm(in[i1].x, 0, 0x4441)][threadIdx.x & index]);
+	ret ^= ROL16(sharedMemory[__byte_perm(in[i2].x, 0, 0x4442)][threadIdx.x &index]);
+	ret ^= ROL24(sharedMemory[__byte_perm(in[i3].x, 0, 0x4443)][threadIdx.x &index]);
+	ret ^= SWAPUINT2(sharedMemory[__byte_perm(in[i4].y, 0, 0x4440)][threadIdx.x &index]);
+	ret ^= ROR24(sharedMemory[__byte_perm(in[i5].y, 0, 0x4441)][threadIdx.x &index]);
+	ret ^= ROR16(sharedMemory[__byte_perm(in[i6].y, 0, 0x4442)][threadIdx.x &index]); //ROR8(__ldg((uint2*)&b7[__byte_perm(in[i6].y, 0, 0x4442)]));
+	ret ^= ROR8(sharedMemory[__byte_perm(in[i7].y, 0, 0x4443)][threadIdx.x &index]); //__ldg((uint2*)&b7[__byte_perm(in[i7].y, 0, 0x4443)]);
 	return ret;
 }
 
 __device__ __forceinline__
-static uint2 d_ROUND_ELT(const uint2 sharedMemory[7][256], const uint2 *const __restrict__ in, const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7){
-
-	uint2 ret = __ldg((uint2*)&b0[__byte_perm(in[i0].x, 0, 0x4440)]);
-	ret ^= sharedMemory[1][__byte_perm(in[i1].x, 0, 0x4441)];
-	ret ^= sharedMemory[2][__byte_perm(in[i2].x, 0, 0x4442)];
-	ret ^= sharedMemory[3][__byte_perm(in[i3].x, 0, 0x4443)];
-	ret ^= sharedMemory[4][__byte_perm(in[i4].y, 0, 0x4440)];
-	ret ^= sharedMemory[5][__byte_perm(in[i5].y, 0, 0x4441)];
-	ret ^= ROR8(__ldg((uint2*)&b7[__byte_perm(in[i6].y, 0, 0x4442)]));
-	ret ^= __ldg((uint2*)&b7[__byte_perm(in[i7].y, 0, 0x4443)]);
-	return ret;
-}
-
-__device__ __forceinline__
-static uint2 d_ROUND_ELT1_LDG(const uint2 sharedMemory[7][256], const uint2 *const __restrict__ in, const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7, const uint2 c0){
-
-	uint2 ret = __ldg((uint2*)&b0[__byte_perm(in[i0].x, 0, 0x4440)]);
-	ret ^= sharedMemory[1][__byte_perm(in[i1].x, 0, 0x4441)];
-	ret ^= sharedMemory[2][__byte_perm(in[i2].x, 0, 0x4442)];
-	ret ^= sharedMemory[3][__byte_perm(in[i3].x, 0, 0x4443)];
-	ret ^= sharedMemory[4][__byte_perm(in[i4].y, 0, 0x4440)];
-	ret ^= ROR24(__ldg((uint2*)&b0[__byte_perm(in[i5].y, 0, 0x4441)]));
-	ret ^= ROR8(__ldg((uint2*)&b7[__byte_perm(in[i6].y, 0, 0x4442)]));
-	ret ^= __ldg((uint2*)&b7[__byte_perm(in[i7].y, 0, 0x4443)]);
+uint2 d_ROUND_ELT1(const uint32_t index, const uint2 sharedMemory[256][16], const uint2 *const __restrict__ in, const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7, const uint2 c0){
+	uint2 ret = sharedMemory[__byte_perm(in[i0].x, 0, 0x4440)][threadIdx.x & index];
+	ret ^= ROL8(sharedMemory[__byte_perm(in[i1].x, 0, 0x4441)][threadIdx.x & index]);
+	ret ^= ROL16(sharedMemory[__byte_perm(in[i2].x, 0, 0x4442)][threadIdx.x & index]);
+	ret ^= ROL24(sharedMemory[__byte_perm(in[i3].x, 0, 0x4443)][threadIdx.x & index]);
+	ret ^= SWAPUINT2(sharedMemory[__byte_perm(in[i4].y, 0, 0x4440)][threadIdx.x & index]);
+	ret ^= ROR24(sharedMemory[__byte_perm(in[i5].y, 0, 0x4441)][threadIdx.x & index]);
+	ret ^= ROR16(sharedMemory[__byte_perm(in[i6].y, 0, 0x4442)][threadIdx.x & index]);//sharedMemory[6][__byte_perm(in[i6].y, 0, 0x4442)]
+	ret ^= ROR8(sharedMemory[__byte_perm(in[i7].y, 0, 0x4443)][threadIdx.x & index]);//sharedMemory[7][__byte_perm(in[i7].y, 0, 0x4443)]
 	ret ^= c0;
 	return ret;
 }
-
-__device__ __forceinline__
-static uint2 d_ROUND_ELT1(const uint2 sharedMemory[7][256], const uint2 *const __restrict__ in, const int i0, const int i1, const int i2, const int i3, const int i4, const int i5, const int i6, const int i7, const uint2 c0){
-	uint2 ret = __ldg((uint2*)&b0[__byte_perm(in[i0].x, 0, 0x4440)]);
-	ret ^= sharedMemory[1][__byte_perm(in[i1].x, 0, 0x4441)];
-	ret ^= sharedMemory[2][__byte_perm(in[i2].x, 0, 0x4442)];
-	ret ^= sharedMemory[3][__byte_perm(in[i3].x, 0, 0x4443)];
-	ret ^= sharedMemory[4][__byte_perm(in[i4].y, 0, 0x4440)];
-	ret ^= sharedMemory[5][__byte_perm(in[i5].y, 0, 0x4441)];
-	ret ^= ROR8(__ldg((uint2*)&b7[__byte_perm(in[i6].y, 0, 0x4442)]));//sharedMemory[6][__byte_perm(in[i6].y, 0, 0x4442)]
-	ret ^= __ldg((uint2*)&b7[__byte_perm(in[i7].y, 0, 0x4443)]);//sharedMemory[7][__byte_perm(in[i7].y, 0, 0x4443)]
-	ret ^= c0;
-	return ret;
-}
-
 //--------END OF WHIRLPOOL DEVICE MACROS-----------------------------------------------------------------------------
 
 //---hamsi macros---
@@ -762,7 +731,6 @@ int x11_simd512_cpu_init(int thr_id, uint32_t threads)
 	for (int i = 0; i<256; i++){
 		table7[i] = ROTR64(table0[i], 8);
 	}
-	cudaMemcpyToSymbol(b7, table7, 256 * sizeof(uint64_t), 0, cudaMemcpyHostToDevice);
 
 	return 0;
 }
@@ -1463,26 +1431,45 @@ static void x16_simd512_gpu_compress_64_whirlpool512(uint32_t *g_hash, const uin
 		0x14b8a457, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0x265f4382, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af
 	};
 
-	__shared__ uint2 sharedMemory[7][256];
+	__shared__ uint2 sharedMemory[256][16];
 
 	if (threadIdx.x < 128)
 	{
-		const uint2 tmp = __ldg((uint2*)&b0[threadIdx.x]);
-		const uint2 tmp2 = __ldg((uint2*)&b0[threadIdx.x + 128]);
-		sharedMemory[0][threadIdx.x] = tmp;
-		sharedMemory[0][threadIdx.x + 128] = tmp2;
-		sharedMemory[1][threadIdx.x] = ROL8(tmp);
-		sharedMemory[1][threadIdx.x + 128] = ROL8(tmp2);
-		sharedMemory[2][threadIdx.x] = ROL16(tmp);
-		sharedMemory[2][threadIdx.x + 128] = ROL16(tmp2);
-		sharedMemory[3][threadIdx.x] = ROL24(tmp);
-		sharedMemory[3][threadIdx.x + 128] = ROL24(tmp2);
-		sharedMemory[4][threadIdx.x] = SWAPUINT2(tmp);
-		sharedMemory[4][threadIdx.x + 128] = SWAPUINT2(tmp2);
-		sharedMemory[5][threadIdx.x] = ROR24(tmp);
-		sharedMemory[5][threadIdx.x + 128] = ROR24(tmp2);
-		sharedMemory[6][threadIdx.x] = ROR16(tmp);
-		sharedMemory[6][threadIdx.x + 128] = ROR16(tmp2);
+		const uint2 tmp = b0[threadIdx.x];
+		const uint2 tmp2 = b0[threadIdx.x+128];
+		sharedMemory[threadIdx.x][0] = tmp;
+		sharedMemory[threadIdx.x][1] = tmp;
+		sharedMemory[threadIdx.x][2] = tmp;
+		sharedMemory[threadIdx.x][3] = tmp;
+		sharedMemory[threadIdx.x][4] = tmp;
+		sharedMemory[threadIdx.x][5] = tmp;
+		sharedMemory[threadIdx.x][6] = tmp;
+		sharedMemory[threadIdx.x][7] = tmp;
+		sharedMemory[threadIdx.x][8] = tmp;
+		sharedMemory[threadIdx.x][9] = tmp;
+		sharedMemory[threadIdx.x][10] = tmp;
+		sharedMemory[threadIdx.x][11] = tmp;
+		sharedMemory[threadIdx.x][12] = tmp;
+		sharedMemory[threadIdx.x][13] = tmp;
+		sharedMemory[threadIdx.x][14] = tmp;
+		sharedMemory[threadIdx.x][15] = tmp;
+
+		sharedMemory[threadIdx.x + 128][0] = tmp2;
+		sharedMemory[threadIdx.x + 128][1] = tmp2;
+		sharedMemory[threadIdx.x + 128][2] = tmp2;
+		sharedMemory[threadIdx.x + 128][3] = tmp2;
+		sharedMemory[threadIdx.x + 128][4] = tmp2;
+		sharedMemory[threadIdx.x + 128][5] = tmp2;
+		sharedMemory[threadIdx.x + 128][6] = tmp2;
+		sharedMemory[threadIdx.x + 128][7] = tmp2;
+		sharedMemory[threadIdx.x + 128][8] = tmp2;
+		sharedMemory[threadIdx.x + 128][9] = tmp2;
+		sharedMemory[threadIdx.x + 128][10] = tmp2;
+		sharedMemory[threadIdx.x + 128][11] = tmp2;
+		sharedMemory[threadIdx.x + 128][12] = tmp2;
+		sharedMemory[threadIdx.x + 128][13] = tmp2;
+		sharedMemory[threadIdx.x + 128][14] = tmp2;
+		sharedMemory[threadIdx.x + 128][15] = tmp2;
 	}
 
 
@@ -1515,28 +1502,31 @@ static void x16_simd512_gpu_compress_64_whirlpool512(uint32_t *g_hash, const uin
 
 	__syncthreads();
 
+	const uint32_t index = 15; //sharedindex;
+
 #pragma unroll 8
 	for (int i = 0; i<8; i++)
 		n[i] = hash[i];
 
-	tmp[0] ^= d_ROUND_ELT(sharedMemory, n, 0, 7, 6, 5, 4, 3, 2, 1);
-	tmp[1] ^= d_ROUND_ELT_LDG(sharedMemory, n, 1, 0, 7, 6, 5, 4, 3, 2);
-	tmp[2] ^= d_ROUND_ELT(sharedMemory, n, 2, 1, 0, 7, 6, 5, 4, 3);
-	tmp[3] ^= d_ROUND_ELT_LDG(sharedMemory, n, 3, 2, 1, 0, 7, 6, 5, 4);
-	tmp[4] ^= d_ROUND_ELT(sharedMemory, n, 4, 3, 2, 1, 0, 7, 6, 5);
-	tmp[5] ^= d_ROUND_ELT_LDG(sharedMemory, n, 5, 4, 3, 2, 1, 0, 7, 6);
-	tmp[6] ^= d_ROUND_ELT(sharedMemory, n, 6, 5, 4, 3, 2, 1, 0, 7);
-	tmp[7] ^= d_ROUND_ELT_LDG(sharedMemory, n, 7, 6, 5, 4, 3, 2, 1, 0);
-	for (int i = 1; i <10; i++){
+	tmp[0] ^= d_ROUND_ELT(index, sharedMemory, n, 0, 7, 6, 5, 4, 3, 2, 1);
+	tmp[1] ^= d_ROUND_ELT(index, sharedMemory, n, 1, 0, 7, 6, 5, 4, 3, 2);
+	tmp[2] ^= d_ROUND_ELT(index, sharedMemory, n, 2, 1, 0, 7, 6, 5, 4, 3);
+	tmp[3] ^= d_ROUND_ELT(index, sharedMemory, n, 3, 2, 1, 0, 7, 6, 5, 4);
+	tmp[4] ^= d_ROUND_ELT(index, sharedMemory, n, 4, 3, 2, 1, 0, 7, 6, 5);
+	tmp[5] ^= d_ROUND_ELT(index, sharedMemory, n, 5, 4, 3, 2, 1, 0, 7, 6);
+	tmp[6] ^= d_ROUND_ELT(index, sharedMemory, n, 6, 5, 4, 3, 2, 1, 0, 7);
+	tmp[7] ^= d_ROUND_ELT(index, sharedMemory, n, 7, 6, 5, 4, 3, 2, 1, 0);
+	for (int i = 1; i <10; i++)
+	{
 		TRANSFER(n, tmp);
-		tmp[0] = d_ROUND_ELT1_LDG(sharedMemory, n, 0, 7, 6, 5, 4, 3, 2, 1, precomputed_round_key_64[(i - 1) * 8 + 0]);
-		tmp[1] = d_ROUND_ELT1(sharedMemory, n, 1, 0, 7, 6, 5, 4, 3, 2, precomputed_round_key_64[(i - 1) * 8 + 1]);
-		tmp[2] = d_ROUND_ELT1(sharedMemory, n, 2, 1, 0, 7, 6, 5, 4, 3, precomputed_round_key_64[(i - 1) * 8 + 2]);
-		tmp[3] = d_ROUND_ELT1_LDG(sharedMemory, n, 3, 2, 1, 0, 7, 6, 5, 4, precomputed_round_key_64[(i - 1) * 8 + 3]);
-		tmp[4] = d_ROUND_ELT1(sharedMemory, n, 4, 3, 2, 1, 0, 7, 6, 5, precomputed_round_key_64[(i - 1) * 8 + 4]);
-		tmp[5] = d_ROUND_ELT1(sharedMemory, n, 5, 4, 3, 2, 1, 0, 7, 6, precomputed_round_key_64[(i - 1) * 8 + 5]);
-		tmp[6] = d_ROUND_ELT1(sharedMemory, n, 6, 5, 4, 3, 2, 1, 0, 7, precomputed_round_key_64[(i - 1) * 8 + 6]);
-		tmp[7] = d_ROUND_ELT1_LDG(sharedMemory, n, 7, 6, 5, 4, 3, 2, 1, 0, precomputed_round_key_64[(i - 1) * 8 + 7]);
+		tmp[0] = d_ROUND_ELT1(index, sharedMemory, n, 0, 7, 6, 5, 4, 3, 2, 1, precomputed_round_key_64[(i - 1) * 8 + 0]);
+		tmp[1] = d_ROUND_ELT1(index, sharedMemory, n, 1, 0, 7, 6, 5, 4, 3, 2, precomputed_round_key_64[(i - 1) * 8 + 1]);
+		tmp[2] = d_ROUND_ELT1(index, sharedMemory, n, 2, 1, 0, 7, 6, 5, 4, 3, precomputed_round_key_64[(i - 1) * 8 + 2]);
+		tmp[3] = d_ROUND_ELT1(index, sharedMemory, n, 3, 2, 1, 0, 7, 6, 5, 4, precomputed_round_key_64[(i - 1) * 8 + 3]);
+		tmp[4] = d_ROUND_ELT1(index, sharedMemory, n, 4, 3, 2, 1, 0, 7, 6, 5, precomputed_round_key_64[(i - 1) * 8 + 4]);
+		tmp[5] = d_ROUND_ELT1(index, sharedMemory, n, 5, 4, 3, 2, 1, 0, 7, 6, precomputed_round_key_64[(i - 1) * 8 + 5]);
+		tmp[6] = d_ROUND_ELT1(index, sharedMemory, n, 6, 5, 4, 3, 2, 1, 0, 7, precomputed_round_key_64[(i - 1) * 8 + 6]);
+		tmp[7] = d_ROUND_ELT1(index, sharedMemory, n, 7, 6, 5, 4, 3, 2, 1, 0, precomputed_round_key_64[(i - 1) * 8 + 7]);
 	}
 
 	TRANSFER(h, tmp);
@@ -1556,26 +1546,27 @@ static void x16_simd512_gpu_compress_64_whirlpool512(uint32_t *g_hash, const uin
 		n[i] = n[i] ^ h[i];
 	}
 
-#pragma unroll 2
-	for (int i = 0; i < 10; i++) {
+//	#pragma unroll 2
+	for (int i = 0; i < 10; i++)
+	{
 		tmp[0] = InitVector_RC[i];
-		tmp[0] ^= d_ROUND_ELT(sharedMemory, h, 0, 7, 6, 5, 4, 3, 2, 1);
-		tmp[1] = d_ROUND_ELT(sharedMemory, h, 1, 0, 7, 6, 5, 4, 3, 2);
-		tmp[2] = d_ROUND_ELT(sharedMemory, h, 2, 1, 0, 7, 6, 5, 4, 3);
-		tmp[3] = d_ROUND_ELT(sharedMemory, h, 3, 2, 1, 0, 7, 6, 5, 4);
-		tmp[4] = d_ROUND_ELT(sharedMemory, h, 4, 3, 2, 1, 0, 7, 6, 5);
-		tmp[5] = d_ROUND_ELT(sharedMemory, h, 5, 4, 3, 2, 1, 0, 7, 6);
-		tmp[6] = d_ROUND_ELT(sharedMemory, h, 6, 5, 4, 3, 2, 1, 0, 7);
-		tmp[7] = d_ROUND_ELT(sharedMemory, h, 7, 6, 5, 4, 3, 2, 1, 0);
+		tmp[0] ^= d_ROUND_ELT(index, sharedMemory, h, 0, 7, 6, 5, 4, 3, 2, 1);
+		tmp[1] = d_ROUND_ELT(index, sharedMemory, h, 1, 0, 7, 6, 5, 4, 3, 2);
+		tmp[2] = d_ROUND_ELT(index, sharedMemory, h, 2, 1, 0, 7, 6, 5, 4, 3);
+		tmp[3] = d_ROUND_ELT(index, sharedMemory, h, 3, 2, 1, 0, 7, 6, 5, 4);
+		tmp[4] = d_ROUND_ELT(index, sharedMemory, h, 4, 3, 2, 1, 0, 7, 6, 5);
+		tmp[5] = d_ROUND_ELT(index, sharedMemory, h, 5, 4, 3, 2, 1, 0, 7, 6);
+		tmp[6] = d_ROUND_ELT(index, sharedMemory, h, 6, 5, 4, 3, 2, 1, 0, 7);
+		tmp[7] = d_ROUND_ELT(index, sharedMemory, h, 7, 6, 5, 4, 3, 2, 1, 0);
 		TRANSFER(h, tmp);
-		tmp[0] = d_ROUND_ELT1_LDG(sharedMemory, n, 0, 7, 6, 5, 4, 3, 2, 1, tmp[0]);
-		tmp[1] = d_ROUND_ELT1_LDG(sharedMemory, n, 1, 0, 7, 6, 5, 4, 3, 2, tmp[1]);
-		tmp[2] = d_ROUND_ELT1_LDG(sharedMemory, n, 2, 1, 0, 7, 6, 5, 4, 3, tmp[2]);
-		tmp[3] = d_ROUND_ELT1_LDG(sharedMemory, n, 3, 2, 1, 0, 7, 6, 5, 4, tmp[3]);
-		tmp[4] = d_ROUND_ELT1_LDG(sharedMemory, n, 4, 3, 2, 1, 0, 7, 6, 5, tmp[4]);
-		tmp[5] = d_ROUND_ELT1_LDG(sharedMemory, n, 5, 4, 3, 2, 1, 0, 7, 6, tmp[5]);
-		tmp[6] = d_ROUND_ELT1_LDG(sharedMemory, n, 6, 5, 4, 3, 2, 1, 0, 7, tmp[6]);
-		tmp[7] = d_ROUND_ELT1_LDG(sharedMemory, n, 7, 6, 5, 4, 3, 2, 1, 0, tmp[7]);
+		tmp[0] = d_ROUND_ELT1(index, sharedMemory, n, 0, 7, 6, 5, 4, 3, 2, 1, tmp[0]);
+		tmp[1] = d_ROUND_ELT1(index, sharedMemory, n, 1, 0, 7, 6, 5, 4, 3, 2, tmp[1]);
+		tmp[2] = d_ROUND_ELT1(index, sharedMemory, n, 2, 1, 0, 7, 6, 5, 4, 3, tmp[2]);
+		tmp[3] = d_ROUND_ELT1(index, sharedMemory, n, 3, 2, 1, 0, 7, 6, 5, 4, tmp[3]);
+		tmp[4] = d_ROUND_ELT1(index, sharedMemory, n, 4, 3, 2, 1, 0, 7, 6, 5, tmp[4]);
+		tmp[5] = d_ROUND_ELT1(index, sharedMemory, n, 5, 4, 3, 2, 1, 0, 7, 6, tmp[5]);
+		tmp[6] = d_ROUND_ELT1(index, sharedMemory, n, 6, 5, 4, 3, 2, 1, 0, 7, tmp[6]);
+		tmp[7] = d_ROUND_ELT1(index, sharedMemory, n, 7, 6, 5, 4, 3, 2, 1, 0, tmp[7]);
 		TRANSFER(n, tmp);
 	}
 
@@ -1587,9 +1578,6 @@ static void x16_simd512_gpu_compress_64_whirlpool512(uint32_t *g_hash, const uin
 	hash[5] = hash[5] ^ n[5];
 	hash[6] = hash[6] ^ n[6];
 	hash[7] = xor3x(hash[7], n[7], vectorize(0x2000000000000));
-
-	//*(uint2x4*)&g_hash[(thread << 6) + 0] = *(uint2x4*)&hash[0];
-	//*(uint2x4*)&g_hash[(thread << 6) + 8] = *(uint2x4*)&hash[4];
 
 	*(uint2x4*)&Hash[0] = *(uint2x4*)&hash[0];
 	*(uint2x4*)&Hash[8] = *(uint2x4*)&hash[4];

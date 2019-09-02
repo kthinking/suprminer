@@ -766,9 +766,6 @@
     <CudaCompile Include="x15\cuda_x15_whirlpool.cu">
       <Filter>Source Files\CUDA\x15</Filter>
     </CudaCompile>
-    <CudaCompile Include="x15\whirlpool.cu">
-      <Filter>Source Files\CUDA\x15</Filter>
-    </CudaCompile>
     <CudaCompile Include="x17\cuda_x17_haval256.cu">
       <Filter>Source Files\CUDA\x17</Filter>
     </CudaCompile>
@@ -979,9 +976,6 @@
     <CudaCompile Include="equi\cuda_equi.cu">
       <Filter>Source Files\equi</Filter>
     </CudaCompile>
-    <CudaCompile Include="x15\cuda_x15_whirlpool_sm3.cu">
-      <Filter>Source Files\CUDA\x15</Filter>
-    </CudaCompile>
     <CudaCompile Include="x16r\cuda_x16_echo512.cu">
       <Filter>Source Files\CUDA\x16r</Filter>
     </CudaCompile>
@@ -1030,6 +1024,9 @@
     </CudaCompile>
     <CudaCompile Include="x16rv2\cuda_tiger192.cu">
       <Filter>Source Files\CUDA\x16rv2</Filter>
+    </CudaCompile>
+    <CudaCompile Include="x16r\cuda_x16_whirlpool.cu">
+      <Filter>Source Files\CUDA\x16r</Filter>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>

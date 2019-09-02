@@ -47,8 +47,11 @@ extern void x14_shabal512_cpu_init(int thr_id, uint32_t threads);
 extern void x14_shabal512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_nonceVector, uint32_t *d_hash, int order);
 
 extern void x15_whirlpool_cpu_init(int thr_id, uint32_t threads, int flag);
-extern void x15_whirlpool_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_nonceVector, uint32_t *d_hash, int order);
+extern void x15_whirlpool_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash,const uint32_t index);
 extern void x15_whirlpool_cpu_free(int thr_id);
+
+
+
 
 extern void x17_sha512_cpu_init(int thr_id, uint32_t threads);
 extern void x17_sha512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
@@ -174,6 +177,7 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 	uint32_t default_throughput = 1 << 19;
 	bool splitsimd = true;
 	bool merge = false;
+	uint32_t whirpoolindex = 15; //andmask 0,1,3,7 or 15
 	if ((strstr(device_name[dev_id], "1060")) || (strstr(device_name[dev_id], "P106")))
 	{
 		default_throughput = (1 << 21);
@@ -204,7 +208,13 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 		default_throughput = 1 << 20;
 		splitsimd = false;
 	}
-	else if ((strstr(device_name[dev_id], "166")) || (strstr(device_name[dev_id], "20")) || (strstr(device_name[dev_id], "1070")) || (strstr(device_name[dev_id], "P104")))
+	else if ((strstr(device_name[dev_id], "166")) || (strstr(device_name[dev_id], "20")))
+	{
+		default_throughput = (1 << 24); //53686272; //1 << 20
+		merge = true;
+		whirpoolindex = 0;
+	}
+	else if(strstr(device_name[dev_id], "1070") || (strstr(device_name[dev_id], "P104")))
 	{
 		default_throughput = (1 << 24); //53686272; //1 << 20
 		merge = true;
@@ -305,7 +315,7 @@ extern "C" int scanhash_x17(int thr_id, struct work* work, uint32_t max_nonce, u
 		x13_hamsi512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 		x13_fugue512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]);
 		x14_shabal512_cpu_hash_64_sp(thr_id, throughput, d_hash[thr_id]); order++;
-		x15_whirlpool_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+		x15_whirlpool_cpu_hash_64(thr_id, throughput, d_hash[thr_id]);
 		x17_sha512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
 		//x17_haval256_cpu_hash_64(thr_id, throughput, pdata[19], d_hash[thr_id], 256); order++;
 		x17_haval256_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], start, d_resNonce[thr_id], *(uint64_t*)&ptarget[6]);
