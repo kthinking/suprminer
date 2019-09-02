@@ -490,7 +490,7 @@ void x11_cubehash512_gpu_hash_64(uint32_t threads, uint64_t *g_hash){
 }
 
 __global__
-__launch_bounds__(384,2)
+__launch_bounds__(448,2)
 void x11_cubehashShavite512_gpu_hash_64(uint32_t threads, uint32_t *g_hash){
 
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);

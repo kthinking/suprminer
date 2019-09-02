@@ -1061,7 +1061,8 @@ static void x16_simd512_gpu_compress_64_echo512(uint32_t *g_hash, const uint4 *c
 
 	__shared__ uint32_t sharedMemory[8 * 1024];
 
-	aes_gpu_init256_32(sharedMemory);
+	if(threadIdx.x<256) aes_gpu_init256_32(sharedMemory);
+
 
 	const uint32_t P[48] = {
 		0xe7e9f5f5, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af, 0xa4213d7e, 0xf5e7e9f5, 0xb3b36b23, 0xb3dbe7af,
