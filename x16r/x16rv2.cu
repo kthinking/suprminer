@@ -59,8 +59,13 @@ extern void x16_simd_jh512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d
 extern void x15_whirlpool_cpu_hash_64_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *d_resNonce, const uint64_t target);
 extern void x13_hamsi512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t *d_hash);
 extern void tiger192_cpu_hash_64(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash);
+extern void tiger192_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash);
 extern void tiger192_setBlock_80(void *pdata);
 extern void tiger192_cpu_hash_80(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash);
+extern void tiger192_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash);
+extern void tiger192sha512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash);
+extern void tiger192sha512_cpu_hash_64_rtx_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
+
 
 static uint32_t *d_hash[MAX_GPUS];
 
@@ -286,7 +291,7 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 	uint32_t *pdata = work->data;
 	uint32_t *ptarget = work->target;
 	const uint32_t first_nonce = pdata[19];
-	const int dev_id = device_map[thr_id];
+	const short dev_id = device_map[thr_id];
 /*	int intensity = (device_sm[dev_id] > 500 ) ? 20 : 18;
 	if (strstr(device_name[dev_id], "GTX 1080")) intensity = 21;
 	if (strstr(device_name[dev_id], "GTX 1060")) intensity = 19;
@@ -295,7 +300,7 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 */
 
 	if (opt_benchmark) {
-		((uint32_t*)ptarget)[7] = 0x00f;
+		((uint32_t*)ptarget)[7] = 0x0ff;
 //		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 //		((uint32_t*)pdata)[2] = 0x76543210;
 		((uint32_t*)pdata)[1] = 0xFFFFFFFF;
@@ -334,11 +339,13 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 	uint32_t default_throughput=1<<19;
 	bool splitsimd = true;
 	bool merge = false;
+	bool usertxtiger = false;
 
 	if ((strstr(device_name[dev_id], "1060")) || (strstr(device_name[dev_id], "P106")))
 	{
 		default_throughput = (1 << 21);
 		splitsimd = false;
+		usertxtiger = true;
 	}
 	else if ((strstr(device_name[dev_id], "970") || (strstr(device_name[dev_id], "980"))))
 	{
@@ -369,6 +376,7 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 	{
 		default_throughput = (1 << 24); //53686272; //1 << 20
 		merge = true;
+		usertxtiger = true;
 	}
 	else if (strstr(device_name[dev_id], "1070") || (strstr(device_name[dev_id], "P104")))
 	{
@@ -538,14 +546,28 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 				jh512_cuda_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]); order++;
 				break;
 			case KECCAK:
-				tiger192_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				if (usertxtiger)
+				{
+					tiger192_cpu_hash_80_rtx(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				}
+				else
+				{
+					tiger192_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				}
 				quark_keccak512_cpu_hash_64(thr_id, throughput, NULL, d_hash[thr_id]); order++;
 				break;
 			case SKEIN:
 				skein512_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id], 1); order++;
 				break;
 			case LUFFA:
-				tiger192_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				if (usertxtiger)
+				{
+					tiger192_cpu_hash_80_rtx(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				}
+				else
+				{
+					tiger192_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				}
 				x11_luffa512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
 				break;
 			case CUBEHASH:
@@ -573,7 +595,14 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 				x16_whirlpool512_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]); order++;
 				break;
 			case SHA512:
-				tiger192_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				if (usertxtiger)
+				{
+					tiger192_cpu_hash_80_rtx(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				}
+				else
+				{
+					tiger192_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]);
+				}
 				x17_sha512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
 				break;
 		}
@@ -638,7 +667,14 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 				quark_jh512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
 				break;
 			case KECCAK:
-				tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
+				if (usertxtiger)
+				{
+					tiger192_cpu_hash_64_rtx(thr_id, throughput, 1, d_hash[thr_id]);
+				}
+				else
+				{
+					tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
+				}
 				quark_keccak512_cpu_hash_64(thr_id, throughput, NULL, d_hash[thr_id]); order++;
 				break;
 			case SKEIN:
@@ -850,16 +886,22 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 			case SHA512:
 				if (i == 15)
 				{
-					tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
-					x17_sha512_cpu_hash_64_final(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
+					tiger192sha512_cpu_hash_64_rtx_final(thr_id, throughput, d_hash[thr_id], d_resNonce[thr_id], ((uint64_t *)ptarget)[3]);
 					CUDA_SAFE_CALL(cudaMemcpy(h_resNonce[thr_id], d_resNonce[thr_id], 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
 					work->nonces[0] = h_resNonce[thr_id][0];
 					addstart = true;
 				}
 				else
 				{
-					tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
-					x17_sha512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
+					if (usertxtiger)
+					{
+						tiger192sha512_cpu_hash_64_rtx(thr_id, throughput, 1, d_hash[thr_id]);
+					}
+					else
+					{
+						tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
+						x17_sha512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
+					}
 				}
 				break;
 			}

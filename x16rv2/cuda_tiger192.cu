@@ -32,17 +32,20 @@
  * ===========================(LICENSE END)=============================
  *
  * @author   phm <phm@inbox.com>
+ * @author   sp <https://github.com/sp-hash>
  */
 #include <cuda.h>
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+#include "cuda_helper_alexis.h"
+#include "miner.h"
+#include "cuda_vectors_alexis.h"
 
 
 #include <stdio.h>
 #include <stdint.h>
 #include <memory.h>
 
-#include "cuda_helper.h"
 
 #define SPH_C64(x)    (x ## ULL)
 #define SPH_C32(x)    (x ## U)
@@ -581,6 +584,16 @@ __constant__ const uint64_t T4[256] = {
 
 #define BYTE(x, n) __byte_perm(((uint32_t*)&(x))[(n) / 4], 0, 0x4440 + ((n) % 4))
 
+#define ROUND_RTX(a, b, c, x, mul)    { \
+	uint64_t t0, t1; \
+	c ^= x; \
+	t0 = sharedMem[BYTE(c, 0)][index] ^ sharedMem[BYTE(c, 2)+256][index] ^ sharedMem[BYTE(c, 4)+512][index] ^ sharedMem[BYTE(c, 6)+768][index]; \
+	t1 = sharedMem[BYTE(c, 7)][index] ^ sharedMem[BYTE(c, 5)+256][index] ^ sharedMem[BYTE(c, 3)+512][index] ^ sharedMem[BYTE(c, 1)+768][index]; \
+	a -= t0; \
+	b += t1; \
+	b *= mul; \
+}
+
 #define ROUND(a, b, c, x, mul)    { \
 	uint64_t t0, t1; \
 	c ^= x; \
@@ -589,7 +602,8 @@ __constant__ const uint64_t T4[256] = {
 	a -= t0; \
 	b += t1; \
 	b *= mul; \
-}
+	}
+
 
 
 #define PASS(a, b, c, mul)    { \
@@ -602,6 +616,17 @@ __constant__ const uint64_t T4[256] = {
 		ROUND(a, b, c, X6, mul); \
 		ROUND(b, c, a, X7, mul); \
 	}
+
+#define PASS_RTX(a, b, c, mul)    { \
+		ROUND_RTX(a, b, c, X0, mul); \
+		ROUND_RTX(b, c, a, X1, mul); \
+		ROUND_RTX(c, a, b, X2, mul); \
+		ROUND_RTX(a, b, c, X3, mul); \
+		ROUND_RTX(b, c, a, X4, mul); \
+		ROUND_RTX(c, a, b, X5, mul); \
+		ROUND_RTX(a, b, c, X6, mul); \
+		ROUND_RTX(b, c, a, X7, mul); \
+		}
 
 
 #define KSCHED    { \
@@ -651,59 +676,630 @@ __constant__ const uint64_t T4[256] = {
 		(r)[2] = SPH_T64(C + (r)[2]); \
 	}
 
+#define TIGER_ROUND_BODY_RTX(in, r)    { \
+		uint64_t A, B, C; \
+		uint64_t X0, X1, X2, X3, X4, X5, X6, X7; \
+ \
+		A = (r)[0]; \
+		B = (r)[1]; \
+		C = (r)[2]; \
+ \
+		X0 = (in[0]); \
+		X1 = (in[1]); \
+		X2 = (in[2]); \
+		X3 = (in[3]); \
+		X4 = (in[4]); \
+		X5 = (in[5]); \
+		X6 = (in[6]); \
+		X7 = (in[7]); \
+		PASS_RTX(A, B, C, 5); \
+		KSCHED; \
+		PASS_RTX(C, A, B, 7); \
+		KSCHED; \
+		PASS_RTX(B, C, A, 9); \
+ \
+		(r)[0] ^= A; \
+		(r)[1] = SPH_T64(B - (r)[1]); \
+		(r)[2] = SPH_T64(C + (r)[2]); \
+		}
 
-__global__ void __launch_bounds__(256,5) tiger192_gpu_hash_64(int threads, int zero_pad_64, uint32_t *d_hash)
+
+//SHA512 MACROS ---------------------------------------------------------------------------
+
+#define SWAP64(u64) cuda_swab64(u64)
+
+static __constant__ uint64_t c_WB[80] = {
+	0x428A2F98D728AE22, 0x7137449123EF65CD, 0xB5C0FBCFEC4D3B2F, 0xE9B5DBA58189DBBC,
+	0x3956C25BF348B538, 0x59F111F1B605D019, 0x923F82A4AF194F9B, 0xAB1C5ED5DA6D8118,
+	0xD807AA98A3030242, 0x12835B0145706FBE, 0x243185BE4EE4B28C, 0x550C7DC3D5FFB4E2,
+	0x72BE5D74F27B896F, 0x80DEB1FE3B1696B1, 0x9BDC06A725C71235, 0xC19BF174CF692694,
+	0xE49B69C19EF14AD2, 0xEFBE4786384F25E3, 0x0FC19DC68B8CD5B5, 0x240CA1CC77AC9C65,
+	0x2DE92C6F592B0275, 0x4A7484AA6EA6E483, 0x5CB0A9DCBD41FBD4, 0x76F988DA831153B5,
+	0x983E5152EE66DFAB, 0xA831C66D2DB43210, 0xB00327C898FB213F, 0xBF597FC7BEEF0EE4,
+	0xC6E00BF33DA88FC2, 0xD5A79147930AA725, 0x06CA6351E003826F, 0x142929670A0E6E70,
+	0x27B70A8546D22FFC, 0x2E1B21385C26C926, 0x4D2C6DFC5AC42AED, 0x53380D139D95B3DF,
+	0x650A73548BAF63DE, 0x766A0ABB3C77B2A8, 0x81C2C92E47EDAEE6, 0x92722C851482353B,
+	0xA2BFE8A14CF10364, 0xA81A664BBC423001, 0xC24B8B70D0F89791, 0xC76C51A30654BE30,
+	0xD192E819D6EF5218, 0xD69906245565A910, 0xF40E35855771202A, 0x106AA07032BBD1B8,
+	0x19A4C116B8D2D0C8, 0x1E376C085141AB53, 0x2748774CDF8EEB99, 0x34B0BCB5E19B48A8,
+	0x391C0CB3C5C95A63, 0x4ED8AA4AE3418ACB, 0x5B9CCA4F7763E373, 0x682E6FF3D6B2B8A3,
+	0x748F82EE5DEFB2FC, 0x78A5636F43172F60, 0x84C87814A1F0AB72, 0x8CC702081A6439EC,
+	0x90BEFFFA23631E28, 0xA4506CEBDE82BDE9, 0xBEF9A3F7B2C67915, 0xC67178F2E372532B,
+	0xCA273ECEEA26619C, 0xD186B8C721C0C207, 0xEADA7DD6CDE0EB1E, 0xF57D4F7FEE6ED178,
+	0x06F067AA72176FBA, 0x0A637DC5A2C898A6, 0x113F9804BEF90DAE, 0x1B710B35131C471B,
+	0x28DB77F523047D84, 0x32CAAB7B40C72493, 0x3C9EBE0A15C9BEBC, 0x431D67C49C100D4C,
+	0x4CC5D4BECB3E42B6, 0x597F299CFC657E2A, 0x5FCB6FAB3AD6FAEC, 0x6C44198C4A475817
+};
+
+#define ROTR64_c(x, n)  (((x) >> (n)) | ((x) << (64 - (n))))
+
+#define BSG5_0(x) xor3(ROTR64(x,28), ROTR64(x,34), ROTR64(x,39))
+#define SSG5_0(x) xor3(ROTR64(x, 1), ROTR64(x ,8), shr_u64(x,7))
+#define SSG5_1(x) xor3(ROTR64(x,19), ROTR64(x,61), shr_u64(x,6))
+
+
+#define BSG5_0_c(x) ((ROTR64_c(x,28)^ ROTR64_c(x,34)^ ROTR64_c(x,39))
+#define SSG5_0_c(x) ((ROTR64_c(x, 1)^ ROTR64_c(x ,8)^ x>>7))
+#define SSG5_1_c(x) ((ROTR64_c(x,19)^ ROTR64_c(x,61)^ x>>6))
+
+
+#define MAJ(X, Y, Z)   (((X) & (Y)) | (((X) | (Y)) & (Z)))
+//#define MAJ(x, y, z)   andor(x,y,z)
+
+__device__ __forceinline__
+uint64_t Tone(const uint64_t* K, uint64_t* r, uint64_t* W, const uint8_t a, const uint8_t i)
 {
-	__shared__ uint64_t sharedMem[768];
-//	if(threadIdx.x < 256)
+	//asm("// TONE \n");
+	const uint64_t e = r[(a + 4) & 7];
+	const uint64_t BSG51 = xor3(ROTR64(e, 14), ROTR64(e, 18), ROTR64(e, 41));
+	const uint64_t f = r[(a + 5) & 7];
+	const uint64_t g = r[(a + 6) & 7];
+	const uint64_t CHl = ((f ^ g) & e) ^ g; // xandx(e, f, g);
+	return (r[(a + 7) & 7] + W[i] + BSG51 + CHl + K[i]);
+}
+
+#define SHA3_STEP(K, r, W, ord, i) { \
+	const int a = (8 - ord) & 7; \
+	uint64_t T1 = Tone(K, r, W, a, i); \
+	r[(a+3) & 7]+= T1; \
+	r[(a+7) & 7] = T1 + (BSG5_0(r[a]) + MAJ(r[a], r[(a+1) & 7], r[(a+2) & 7])); \
+}
+
+#define bsg5_0(x) (ROTR64(x,28) ^ ROTR64(x,34) ^ ROTR64(x,39))
+#define bsg5_1(x) (ROTR64(x,14) ^ ROTR64(x,18) ^ ROTR64(x,41))
+#define ssg5_0(x) (ROTR64(x, 1) ^ ROTR64(x, 8) ^ shr_u64(x,7))
+#define ssg5_1(x) (ROTR64(x,19) ^ ROTR64(x,61) ^ shr_u64(x,6))
+
+
+#define bsg5_0_c(x) (ROTR64_c(x,28) ^ ROTR64_c(x,34) ^ ROTR64_c(x,39))
+#define bsg5_1_c(x) (ROTR64_c(x,14) ^ ROTR64_c(x,18) ^ ROTR64_c(x,41))
+
+#define andor64(a,b,c) ((a & (b | c)) | (b & c))
+#define xandx64(e,f,g) (g ^ (e & (g ^ f)))
+
+static __constant__ const uint64_t K_512[80] = {
+	0x428A2F98D728AE22, 0x7137449123EF65CD, 0xB5C0FBCFEC4D3B2F, 0xE9B5DBA58189DBBC, 0x3956C25BF348B538, 0x59F111F1B605D019, 0x923F82A4AF194F9B, 0xAB1C5ED5DA6D8118,
+	0xD807AA98A3030242, 0x12835B0145706FBE, 0x243185BE4EE4B28C, 0x550C7DC3D5FFB4E2, 0x72BE5D74F27B896F, 0x80DEB1FE3B1696B1, 0x9BDC06A725C71235, 0xC19BF174CF692694,
+	0xE49B69C19EF14AD2, 0xEFBE4786384F25E3, 0x0FC19DC68B8CD5B5, 0x240CA1CC77AC9C65, 0x2DE92C6F592B0275, 0x4A7484AA6EA6E483, 0x5CB0A9DCBD41FBD4, 0x76F988DA831153B5,
+	0x983E5152EE66DFAB, 0xA831C66D2DB43210, 0xB00327C898FB213F, 0xBF597FC7BEEF0EE4, 0xC6E00BF33DA88FC2, 0xD5A79147930AA725, 0x06CA6351E003826F, 0x142929670A0E6E70,
+	0x27B70A8546D22FFC, 0x2E1B21385C26C926, 0x4D2C6DFC5AC42AED, 0x53380D139D95B3DF, 0x650A73548BAF63DE, 0x766A0ABB3C77B2A8, 0x81C2C92E47EDAEE6, 0x92722C851482353B,
+	0xA2BFE8A14CF10364, 0xA81A664BBC423001, 0xC24B8B70D0F89791, 0xC76C51A30654BE30, 0xD192E819D6EF5218, 0xD69906245565A910, 0xF40E35855771202A, 0x106AA07032BBD1B8,
+	0x19A4C116B8D2D0C8, 0x1E376C085141AB53, 0x2748774CDF8EEB99, 0x34B0BCB5E19B48A8, 0x391C0CB3C5C95A63, 0x4ED8AA4AE3418ACB, 0x5B9CCA4F7763E373, 0x682E6FF3D6B2B8A3,
+	0x748F82EE5DEFB2FC, 0x78A5636F43172F60, 0x84C87814A1F0AB72, 0x8CC702081A6439EC, 0x90BEFFFA23631E28, 0xA4506CEBDE82BDE9, 0xBEF9A3F7B2C67915, 0xC67178F2E372532B,
+	0xCA273ECEEA26619C, 0xD186B8C721C0C207, 0xEADA7DD6CDE0EB1E, 0xF57D4F7FEE6ED178, 0x06F067AA72176FBA, 0x0A637DC5A2C898A6, 0x113F9804BEF90DAE, 0x1B710B35131C471B,
+	0x28DB77F523047D84, 0x32CAAB7B40C72493, 0x3C9EBE0A15C9BEBC, 0x431D67C49C100D4C, 0x4CC5D4BECB3E42B6, 0x597F299CFC657E2A, 0x5FCB6FAB3AD6FAEC, 0x6C44198C4A475817
+};
+//--------------------- end SHA512 macros -----------------------
+
+
+__global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_64(int threads, uint32_t *d_hash)
+{
+	__shared__ uint64_t sharedMem[1024];
+	//	if(threadIdx.x < 256)
 	{
-		sharedMem[threadIdx.x]      = T1[threadIdx.x];
-		sharedMem[threadIdx.x+256]  = T2[threadIdx.x];
-		sharedMem[threadIdx.x+512]  = T3[threadIdx.x];
-		//sharedMem[threadIdx.x+768]  = T4[threadIdx.x];
+		sharedMem[threadIdx.x] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512] = T3[threadIdx.x];
+		sharedMem[threadIdx.x+768]  = T4[threadIdx.x];
 	}
 	__syncthreads();
 
-  int thread = (blockDim.x * blockIdx.x + threadIdx.x);
-  if (thread < threads) {
-		uint64_t* inout = (uint64_t*)&d_hash[thread<<4];
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads) {
+		uint64_t* inout = (uint64_t*)&d_hash[thread << 4];
 		uint64_t buf[3], in[8], in2[8];
 
-		#pragma unroll
+#pragma unroll
 		for (int i = 0; i < 8; i++) in[i] = inout[i];
 
-		#pragma unroll
+#pragma unroll
 		for (int i = 0; i < 3; i++) buf[i] = III[i];
 
 		TIGER_ROUND_BODY(in, buf);
 
-	    in2[0] = 1;
-		#pragma unroll
-		for (int i = 1 ; i < 7; i++) in2[i] = 0;
+		in2[0] = 1;
+#pragma unroll
+		for (int i = 1; i < 7; i++) in2[i] = 0;
 		in2[7] = 0x200;
 		TIGER_ROUND_BODY(in2, buf);
 
-		#pragma unroll
-		for (int i = 0; i < 3; i++) inout[i] = buf[i];
-		if (zero_pad_64)
-        {
-            #pragma unroll
-            for (int i = 3; i < 8; i++) inout[i] = 0;
-        }
+		inout[0] = buf[0];
+		inout[1] = buf[1];
+		inout[2] = buf[2];
+		inout[3] = 0;
+		inout[4] = 0;
+		inout[5] = 0;
+		inout[6] = 0;
+		inout[7] = 0;
 	}
 }
+__global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
+{
+	__shared__ uint64_t sharedMem[1024][4];
+	//	if(threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][2] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][3] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256][0] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][1] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][2] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][3] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512][0] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][1] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][2] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][3] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 768][0] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][1] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][2] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][3] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads) 
+	{
+		int index = threadIdx.x & 3;
+		uint64_t* inout = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = inout[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY_RTX(in, buf);
+
+		in2[0] = 1;
+#pragma unroll
+		for (int i = 1; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x200;
+		TIGER_ROUND_BODY_RTX(in2, buf);
+
+		inout[0] = buf[0];
+		inout[1] = buf[1];
+		inout[2] = buf[2];
+		inout[3] = 0;
+		inout[4] = 0;
+		inout[5] = 0;
+		inout[6] = 0;
+		inout[7] = 0;
+	}
+}
+
+__global__ __launch_bounds__(512, 2)
+void tiger192sha512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
+{
+	__shared__ uint64_t sharedMem[1024][4];
+	if(threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][2] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][3] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256][0] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][1] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][2] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][3] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512][0] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][1] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][2] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][3] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 768][0] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][1] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][2] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][3] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads) 
+	{	
+		const int index = threadIdx.x & 3;
+
+		uint64_t* inout = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = inout[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY_RTX(in, buf);
+
+		in2[0] = 1;
+#pragma unroll
+		for (int i = 1; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x200;
+		TIGER_ROUND_BODY_RTX(in2, buf);
+
+		const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+		const uint64_t IV512[8] = {
+			0x6A09E667F3BCC908, 0xBB67AE8584CAA73B, 0x3C6EF372FE94F82B, 0xA54FF53A5F1D36F1,
+			0x510E527FADE682D1, 0x9B05688C2B3E6C1F, 0x1F83D9ABFB41BD6B, 0x5BE0CD19137E2179
+		};
+		uint64_t r[8];
+		uint64_t W[80];
+		//			uint64_t *pHash = &g_hash[thread << 3];
+		W[0] = cuda_swab64(buf[0]);
+		W[1] = cuda_swab64(buf[1]);
+		W[2] = cuda_swab64(buf[2]);
+		W[3] = 0;
+		W[4] = 0;
+		W[5] = 0;
+		W[6] = 0;
+		W[7] = 0;
+
+		//			*(uint2x4*)&W[0] = *(uint2x4*)&pHash[0];
+		//			*(uint2x4*)&W[4] = *(uint2x4*)&pHash[4];
+
+		//	#pragma unroll
+		//		for (int i = 0; i < 8; i++) {
+		//			W[i] = cuda_swab64(W[i]);
+		//		}
+		W[8] = 0x8000000000000000;
+
+		#pragma unroll
+		for (int i = 9; i < 15; i++) {
+			W[i] = 0U;
+		}
+		W[15] = 0x0000000000000200;
+
+		#pragma unroll 64
+		for (int i = 16; i < 80; i++) {
+			W[i] = W[i - 7] + W[i - 16] + SSG5_0(W[i - 15]) + SSG5_1(W[i - 2]);
+		}
+
+		*(uint2x4*)&r[0] = *(uint2x4*)&IV512[0];
+		*(uint2x4*)&r[4] = *(uint2x4*)&IV512[4];
+
+		uint64_t t1;
+		#pragma unroll 16
+		for (int i = 0; i < 16; i++)
+		{
+			t1 = W[i] + r[7] + bsg5_1_c(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i];
+			#pragma unroll
+			for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+			r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0_c(r[1]);
+			r[4] += t1;
+		}
+
+		#pragma unroll
+		for (int i = 16; i < 80; i += 16)
+		{
+			#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				W[j] = ssg5_1(W[(j + 14) & 15]) + ssg5_0(W[(j + 1) & 15]) + W[j] + W[(j + 9) & 15];
+			}
+
+			#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				t1 = r[7] + W[j] + bsg5_1(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i + j];
+				//				t1 = r[ 7] + W[j] + K_512[i+j] + xandx64(r[ 4], r[ 5], r[ 6]) + bsg5_1(r[ 4]);
+				#pragma unroll
+				for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+				r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0(r[1]);
+				r[4] += t1;
+			}
+		}
+
+		#pragma unroll
+		for (int u = 0; u < 8; u++) {
+			r[u] = cuda_swab64(r[u] + IV512[u]);
+		}
+		*(uint2x4*)&inout[0] = *(uint2x4*)&r[0];
+		*(uint2x4*)&inout[4] = *(uint2x4*)&r[4];
+	}
+}
+
+__global__ __launch_bounds__(512, 2)
+void tiger192sha512_gpu_hash_64_rtx_final(int threads, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target)
+{
+	__shared__ uint64_t sharedMem[1024][4];
+	if (threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][2] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][3] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256][0] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][1] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][2] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][3] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512][0] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][1] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][2] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][3] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 768][0] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][1] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][2] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][3] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads)
+	{
+		const int index = threadIdx.x & 3;
+
+		uint64_t* inout = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = inout[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY_RTX(in, buf);
+
+		in2[0] = 1;
+#pragma unroll
+		for (int i = 1; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x200;
+		TIGER_ROUND_BODY_RTX(in2, buf);
+
+/*		inout[0] = buf[0];
+		inout[1] = buf[1];
+		inout[2] = buf[2];
+		inout[3] = 0;
+		inout[3] = 0;
+		inout[4] = 0;
+		inout[5] = 0;
+		inout[6] = 0;
+		inout[7] = 0;
+*/
+		const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+		const uint64_t IV512[8] = {
+			0x6A09E667F3BCC908, 0xBB67AE8584CAA73B, 0x3C6EF372FE94F82B, 0xA54FF53A5F1D36F1,
+			0x510E527FADE682D1, 0x9B05688C2B3E6C1F, 0x1F83D9ABFB41BD6B, 0x5BE0CD19137E2179
+		};
+		uint64_t r[8];
+		uint64_t W[80];
+		//			uint64_t *pHash = &g_hash[thread << 3];
+		W[0] = cuda_swab64(buf[0]);
+		W[1] = cuda_swab64(buf[1]);
+		W[2] = cuda_swab64(buf[2]);
+		W[3] = 0;
+		W[4] = 0;
+		W[5] = 0;
+		W[6] = 0;
+		W[7] = 0;
+
+		//			*(uint2x4*)&W[0] = *(uint2x4*)&pHash[0];
+		//			*(uint2x4*)&W[4] = *(uint2x4*)&pHash[4];
+
+		//	#pragma unroll
+		//		for (int i = 0; i < 8; i++) {
+		//			W[i] = cuda_swab64(W[i]);
+		//		}
+		W[8] = 0x8000000000000000;
+
+#pragma unroll
+		for (int i = 9; i < 15; i++) {
+			W[i] = 0U;
+		}
+		W[15] = 0x0000000000000200;
+
+#pragma unroll 64
+		for (int i = 16; i < 80; i++) {
+			W[i] = W[i - 7] + W[i - 16] + SSG5_0(W[i - 15]) + SSG5_1(W[i - 2]);
+		}
+
+		*(uint2x4*)&r[0] = *(uint2x4*)&IV512[0];
+		*(uint2x4*)&r[4] = *(uint2x4*)&IV512[4];
+
+		uint64_t t1;
+#pragma unroll 16
+		for (int i = 0; i < 16; i++)
+		{
+			t1 = W[i] + r[7] + bsg5_1_c(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i];
+#pragma unroll
+			for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+			r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0_c(r[1]);
+			r[4] += t1;
+		}
+
+#pragma unroll
+		for (int i = 16; i < 80; i += 16)
+		{
+#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				W[j] = ssg5_1(W[(j + 14) & 15]) + ssg5_0(W[(j + 1) & 15]) + W[j] + W[(j + 9) & 15];
+			}
+
+#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				t1 = r[7] + W[j] + bsg5_1(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i + j];
+				//				t1 = r[ 7] + W[j] + K_512[i+j] + xandx64(r[ 4], r[ 5], r[ 6]) + bsg5_1(r[ 4]);
+#pragma unroll
+				for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+				r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0(r[1]);
+				r[4] += t1;
+			}
+		}
+
+//#pragma unroll
+//		for (int u = 0; u < 8; u++) {
+//			r[u] = cuda_swab64(r[u] + IV512[u]);
+//		}
+		r[3] = cuda_swab64(r[3] + IV512[3]);
+
+		if (r[3] <= target)
+		{
+			uint32_t tmp = atomicExch(&resNonce[0], thread);
+			if (tmp != UINT32_MAX)
+				resNonce[1] = tmp;
+		}
+
+//		*(uint2x4*)&inout[0] = *(uint2x4*)&r[0];
+//		*(uint2x4*)&inout[4] = *(uint2x4*)&r[4];
+
+	}
+}
+
+
+
+__global__ __launch_bounds__(512, 2)
+void tiger192sha512_gpu_hash_64(int threads, uint32_t *d_hash)
+{
+	__shared__ uint64_t sharedMem[768];
+	if (threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512] = T3[threadIdx.x];
+//		sharedMem[threadIdx.x + 768] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads)
+	{
+		uint64_t* inout = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = inout[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY(in, buf);
+
+		in2[0] = 1;
+#pragma unroll
+		for (int i = 1; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x200;
+		TIGER_ROUND_BODY(in2, buf);
+
+		inout[0] = buf[0];
+		inout[1] = buf[1];
+		inout[2] = buf[2];
+		inout[3] = 0;
+		inout[4] = 0;
+		inout[5] = 0;
+		inout[6] = 0;
+		inout[7] = 0;
+
+
+		const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+		const uint64_t IV512[8] = {
+			0x6A09E667F3BCC908, 0xBB67AE8584CAA73B, 0x3C6EF372FE94F82B, 0xA54FF53A5F1D36F1,
+			0x510E527FADE682D1, 0x9B05688C2B3E6C1F, 0x1F83D9ABFB41BD6B, 0x5BE0CD19137E2179
+		};
+		uint64_t r[8];
+		uint64_t W[80];
+		//			uint64_t *pHash = &g_hash[thread << 3];
+		W[0] = cuda_swab64(inout[0]);
+		W[1] = cuda_swab64(inout[1]);
+		W[2] = cuda_swab64(inout[2]);
+		W[3] = 0;
+		W[4] = 0;
+		W[5] = 0;
+		W[6] = 0;
+		W[7] = 0;
+
+		//			*(uint2x4*)&W[0] = *(uint2x4*)&pHash[0];
+		//			*(uint2x4*)&W[4] = *(uint2x4*)&pHash[4];
+
+		//	#pragma unroll
+		//		for (int i = 0; i < 8; i++) {
+		//			W[i] = cuda_swab64(W[i]);
+		//		}
+		W[8] = 0x8000000000000000;
+
+#pragma unroll
+		for (int i = 9; i < 15; i++) {
+			W[i] = 0U;
+		}
+		W[15] = 0x0000000000000200;
+
+#pragma unroll 64
+		for (int i = 16; i < 80; i++) {
+			W[i] = W[i - 7] + W[i - 16] + SSG5_0(W[i - 15]) + SSG5_1(W[i - 2]);
+		}
+
+		*(uint2x4*)&r[0] = *(uint2x4*)&IV512[0];
+		*(uint2x4*)&r[4] = *(uint2x4*)&IV512[4];
+
+		uint64_t t1;
+#pragma unroll 16
+		for (int i = 0; i < 16; i++)
+		{
+			t1 = W[i] + r[7] + bsg5_1_c(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i];
+#pragma unroll
+			for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+			r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0_c(r[1]);
+			r[4] += t1;
+		}
+
+#pragma unroll
+		for (int i = 16; i < 80; i += 16)
+		{
+#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				W[j] = ssg5_1(W[(j + 14) & 15]) + ssg5_0(W[(j + 1) & 15]) + W[j] + W[(j + 9) & 15];
+			}
+
+#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				t1 = r[7] + W[j] + bsg5_1(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i + j];
+				//				t1 = r[ 7] + W[j] + K_512[i+j] + xandx64(r[ 4], r[ 5], r[ 6]) + bsg5_1(r[ 4]);
+#pragma unroll
+				for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+				r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0(r[1]);
+				r[4] += t1;
+			}
+		}
+
+#pragma unroll
+		for (int u = 0; u < 8; u++) {
+			r[u] = cuda_swab64(r[u] + IV512[u]);
+		}
+
+		*(uint2x4*)&inout[0] = *(uint2x4*)&r[0];
+		*(uint2x4*)&inout[4] = *(uint2x4*)&r[4];
+
+	}
+}
+
+
 
 __constant__ uint64_t c_PaddedMessage80[10];
 
 __global__ void __launch_bounds__(256,5) tiger192_gpu_hash_80(int threads, uint32_t startNonce, uint32_t *d_hash)
 {
-	__shared__ uint64_t sharedMem[768];
+	__shared__ uint64_t sharedMem[1024];
 //	if(threadIdx.x < 256)
 	{
 		sharedMem[threadIdx.x]      = T1[threadIdx.x];
 		sharedMem[threadIdx.x+256]  = T2[threadIdx.x];
 		sharedMem[threadIdx.x+512]  = T3[threadIdx.x];
-		//sharedMem[threadIdx.x+768]  = T4[threadIdx.x];
+		sharedMem[threadIdx.x+768]  = T4[threadIdx.x];
 	}
 	__syncthreads();
 
@@ -738,13 +1334,98 @@ __global__ void __launch_bounds__(256,5) tiger192_gpu_hash_80(int threads, uint3
   }
 }
 
+__global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_80_rtx(int threads, uint32_t startNonce, uint32_t *d_hash)
+{
+	__shared__ uint64_t sharedMem[1024][4];
+	if(threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][2] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][3] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256][0] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][1] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][2] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][3] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512][0] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][1] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][2] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][3] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 768][0] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][1] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][2] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][3] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads) 
+	{
+		const int index = threadIdx.x & 3;
+		uint64_t* out = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+		const uint32_t nonce = cuda_swab32(startNonce + thread);
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = c_PaddedMessage80[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY_RTX(in, buf);
+
+		in2[0] = c_PaddedMessage80[8];
+		in2[1] = (((uint64_t)nonce) << 32) | (c_PaddedMessage80[9] & 0xffffffff);
+		in2[2] = 1;
+#pragma unroll
+		for (int i = 3; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x280;
+
+		TIGER_ROUND_BODY_RTX(in2, buf);
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) out[i] = buf[i];
+#pragma unroll
+		for (int i = 3; i < 8; i++) out[i] = 0;
+	}
+}
+
 __host__ void tiger192_cpu_hash_64(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash)
 {
 	const int threadsperblock = 256;
 	dim3 grid(threads/threadsperblock);
 	dim3 block(threadsperblock);
-	tiger192_gpu_hash_64<<<grid, block>>>(threads, zero_pad_64, d_hash);
+	tiger192_gpu_hash_64<<<grid, block>>>(threads, d_hash);
 }
+__host__ void tiger192_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash)
+{
+	const int threadsperblock = 256;
+	dim3 grid(threads / threadsperblock);
+	dim3 block(threadsperblock);
+	tiger192_gpu_hash_64_rtx << <grid, block >> >(threads, d_hash);
+}
+
+
+__host__ void tiger192sha512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash)
+{
+	const int threadsperblock = 512;
+	dim3 grid(threads / threadsperblock);
+	dim3 block(threadsperblock);
+	tiger192sha512_gpu_hash_64_rtx << <grid, block >> >(threads, d_hash);
+}
+
+__host__
+void tiger192sha512_cpu_hash_64_rtx_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target)
+{
+	const uint32_t threadsperblock = 512;
+
+	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
+	dim3 block(threadsperblock);
+
+	tiger192sha512_gpu_hash_64_rtx_final << <grid, block >> > (threads, d_hash, resNonce, target);
+}
+
 
 __host__
 void tiger192_setBlock_80(void *pdata)
@@ -759,3 +1440,12 @@ __host__ void tiger192_cpu_hash_80(int thr_id, int threads, uint32_t startNonce,
 	dim3 block(threadsperblock);
 	tiger192_gpu_hash_80<<<grid, block>>>(threads, startNonce, d_hash);
 }
+
+__host__ void tiger192_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash)
+{
+	const int threadsperblock = 256;
+	dim3 grid(threads / threadsperblock);
+	dim3 block(threadsperblock);
+	tiger192_gpu_hash_80_rtx << <grid, block >> >(threads, startNonce, d_hash);
+}
+
