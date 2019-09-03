@@ -65,6 +65,7 @@ extern void tiger192_cpu_hash_80(int thr_id, int threads, uint32_t startNonce, u
 extern void tiger192_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash);
 extern void tiger192sha512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash);
 extern void tiger192sha512_cpu_hash_64_rtx_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
+extern void tiger192sha512_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash);
 
 
 static uint32_t *d_hash[MAX_GPUS];
@@ -597,13 +598,13 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 			case SHA512:
 				if (usertxtiger)
 				{
-					tiger192_cpu_hash_80_rtx(thr_id, throughput, pdata[19], d_hash[thr_id]);
+					tiger192sha512_cpu_hash_80_rtx(thr_id, throughput, pdata[19], d_hash[thr_id]);
 				}
 				else
 				{
 					tiger192_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]);
+					x17_sha512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
 				}
-				x17_sha512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
 				break;
 		}
 		uint8_t algo;

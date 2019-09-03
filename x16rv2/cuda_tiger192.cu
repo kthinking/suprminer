@@ -893,7 +893,7 @@ __global__ __launch_bounds__(512, 2)
 void tiger192sha512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
 {
 	__shared__ uint64_t sharedMem[1024][4];
-	if(threadIdx.x < 256)
+	if (threadIdx.x < 256)
 	{
 		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
 		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
@@ -915,8 +915,8 @@ void tiger192sha512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
 	__syncthreads();
 
 	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
-	if (thread < threads) 
-	{	
+	if (thread < threads)
+	{
 		const int index = threadIdx.x & 3;
 
 		uint64_t* inout = (uint64_t*)&d_hash[thread << 4];
@@ -962,13 +962,13 @@ void tiger192sha512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
 		//		}
 		W[8] = 0x8000000000000000;
 
-		#pragma unroll
+#pragma unroll
 		for (int i = 9; i < 15; i++) {
 			W[i] = 0U;
 		}
 		W[15] = 0x0000000000000200;
 
-		#pragma unroll 64
+#pragma unroll 64
 		for (int i = 16; i < 80; i++) {
 			W[i] = W[i - 7] + W[i - 16] + SSG5_0(W[i - 15]) + SSG5_1(W[i - 2]);
 		}
@@ -977,36 +977,36 @@ void tiger192sha512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
 		*(uint2x4*)&r[4] = *(uint2x4*)&IV512[4];
 
 		uint64_t t1;
-		#pragma unroll 16
+#pragma unroll 16
 		for (int i = 0; i < 16; i++)
 		{
 			t1 = W[i] + r[7] + bsg5_1_c(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i];
-			#pragma unroll
+#pragma unroll
 			for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
 			r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0_c(r[1]);
 			r[4] += t1;
 		}
 
-		#pragma unroll
+#pragma unroll
 		for (int i = 16; i < 80; i += 16)
 		{
-			#pragma unroll
+#pragma unroll
 			for (uint32_t j = 0; j < 16; j++){
 				W[j] = ssg5_1(W[(j + 14) & 15]) + ssg5_0(W[(j + 1) & 15]) + W[j] + W[(j + 9) & 15];
 			}
 
-			#pragma unroll
+#pragma unroll
 			for (uint32_t j = 0; j < 16; j++){
 				t1 = r[7] + W[j] + bsg5_1(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i + j];
 				//				t1 = r[ 7] + W[j] + K_512[i+j] + xandx64(r[ 4], r[ 5], r[ 6]) + bsg5_1(r[ 4]);
-				#pragma unroll
+#pragma unroll
 				for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
 				r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0(r[1]);
 				r[4] += t1;
 			}
 		}
 
-		#pragma unroll
+#pragma unroll
 		for (int u = 0; u < 8; u++) {
 			r[u] = cuda_swab64(r[u] + IV512[u]);
 		}
@@ -1161,8 +1161,6 @@ void tiger192sha512_gpu_hash_64_rtx_final(int threads, uint32_t *d_hash, uint32_
 	}
 }
 
-
-
 __global__ __launch_bounds__(512, 2)
 void tiger192sha512_gpu_hash_64(int threads, uint32_t *d_hash)
 {
@@ -1287,9 +1285,8 @@ void tiger192sha512_gpu_hash_64(int threads, uint32_t *d_hash)
 	}
 }
 
-
-
 __constant__ uint64_t c_PaddedMessage80[10];
+
 
 __global__ void __launch_bounds__(256,5) tiger192_gpu_hash_80(int threads, uint32_t startNonce, uint32_t *d_hash)
 {
@@ -1334,10 +1331,11 @@ __global__ void __launch_bounds__(256,5) tiger192_gpu_hash_80(int threads, uint3
   }
 }
 
-__global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_80_rtx(int threads, uint32_t startNonce, uint32_t *d_hash)
+__global__  __launch_bounds__(512, 2)
+void tiger192sha512_gpu_hash_80_rtx(int threads, uint32_t startNonce, uint32_t *d_hash)
 {
 	__shared__ uint64_t sharedMem[1024][4];
-	if(threadIdx.x < 256)
+	if (threadIdx.x < 256)
 	{
 		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
 		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
@@ -1359,7 +1357,129 @@ __global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_80_rtx(int threads, 
 	__syncthreads();
 
 	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
-	if (thread < threads) 
+	if (thread < threads)
+	{
+		const int index = threadIdx.x & 3;
+		uint64_t* out = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+		const uint32_t nonce = cuda_swab32(startNonce + thread);
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = c_PaddedMessage80[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY_RTX(in, buf);
+
+		in2[0] = c_PaddedMessage80[8];
+		in2[1] = (((uint64_t)nonce) << 32) | (c_PaddedMessage80[9] & 0xffffffff);
+		in2[2] = 1;
+#pragma unroll
+		for (int i = 3; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x280;
+
+		TIGER_ROUND_BODY_RTX(in2, buf);
+
+		const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
+		const uint64_t IV512[8] = {
+			0x6A09E667F3BCC908, 0xBB67AE8584CAA73B, 0x3C6EF372FE94F82B, 0xA54FF53A5F1D36F1,
+			0x510E527FADE682D1, 0x9B05688C2B3E6C1F, 0x1F83D9ABFB41BD6B, 0x5BE0CD19137E2179
+		};
+		uint64_t r[8];
+		uint64_t W[80];
+		//			uint64_t *pHash = &g_hash[thread << 3];
+		W[0] = cuda_swab64(buf[0]);
+		W[1] = cuda_swab64(buf[1]);
+		W[2] = cuda_swab64(buf[2]);
+		W[3] = 0;
+		W[4] = 0;
+		W[5] = 0;
+		W[6] = 0;
+		W[7] = 0;
+		W[8] = 0x8000000000000000;
+
+#pragma unroll
+		for (int i = 9; i < 15; i++) {
+			W[i] = 0U;
+		}
+		W[15] = 0x0000000000000200;
+
+#pragma unroll 64
+		for (int i = 16; i < 80; i++) {
+			W[i] = W[i - 7] + W[i - 16] + SSG5_0(W[i - 15]) + SSG5_1(W[i - 2]);
+		}
+
+		*(uint2x4*)&r[0] = *(uint2x4*)&IV512[0];
+		*(uint2x4*)&r[4] = *(uint2x4*)&IV512[4];
+
+		uint64_t t1;
+#pragma unroll 16
+		for (int i = 0; i < 16; i++)
+		{
+			t1 = W[i] + r[7] + bsg5_1_c(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i];
+#pragma unroll
+			for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+			r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0_c(r[1]);
+			r[4] += t1;
+		}
+
+#pragma unroll
+		for (int i = 16; i < 80; i += 16)
+		{
+#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				W[j] = ssg5_1(W[(j + 14) & 15]) + ssg5_0(W[(j + 1) & 15]) + W[j] + W[(j + 9) & 15];
+			}
+
+#pragma unroll
+			for (uint32_t j = 0; j < 16; j++){
+				t1 = r[7] + W[j] + bsg5_1(r[4]) + xandx64(r[4], r[5], r[6]) + K_512[i + j];
+				//				t1 = r[ 7] + W[j] + K_512[i+j] + xandx64(r[ 4], r[ 5], r[ 6]) + bsg5_1(r[ 4]);
+#pragma unroll
+				for (int l = 6; l >= 0; l--) r[l + 1] = r[l];
+				r[0] = t1 + andor64(r[1], r[2], r[3]) + bsg5_0(r[1]);
+				r[4] += t1;
+			}
+		}
+
+#pragma unroll
+		for (int u = 0; u < 8; u++) {
+			r[u] = cuda_swab64(r[u] + IV512[u]);
+		}
+		*(uint2x4*)&out[0] = *(uint2x4*)&r[0];
+		*(uint2x4*)&out[4] = *(uint2x4*)&r[4];
+
+	}
+}
+
+__global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_80_rtx(int threads, uint32_t startNonce, uint32_t *d_hash)
+{
+	__shared__ uint64_t sharedMem[1024][4];
+	if (threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][2] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][3] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256][0] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][1] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][2] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][3] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512][0] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][1] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][2] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][3] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 768][0] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][1] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][2] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][3] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads)
 	{
 		const int index = threadIdx.x & 3;
 		uint64_t* out = (uint64_t*)&d_hash[thread << 4];
@@ -1391,6 +1511,7 @@ __global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_80_rtx(int threads, 
 	}
 }
 
+
 __host__ void tiger192_cpu_hash_64(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash)
 {
 	const int threadsperblock = 256;
@@ -1405,7 +1526,6 @@ __host__ void tiger192_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64,
 	dim3 block(threadsperblock);
 	tiger192_gpu_hash_64_rtx << <grid, block >> >(threads, d_hash);
 }
-
 
 __host__ void tiger192sha512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash)
 {
@@ -1441,6 +1561,14 @@ __host__ void tiger192_cpu_hash_80(int thr_id, int threads, uint32_t startNonce,
 	tiger192_gpu_hash_80<<<grid, block>>>(threads, startNonce, d_hash);
 }
 
+__host__ void tiger192sha512_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash)
+{
+	const int threadsperblock = 512;
+	dim3 grid(threads / threadsperblock);
+	dim3 block(threadsperblock);
+	tiger192sha512_gpu_hash_80_rtx << <grid, block >> >(threads, startNonce, d_hash);
+}
+
 __host__ void tiger192_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash)
 {
 	const int threadsperblock = 256;
@@ -1448,4 +1576,5 @@ __host__ void tiger192_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNo
 	dim3 block(threadsperblock);
 	tiger192_gpu_hash_80_rtx << <grid, block >> >(threads, startNonce, d_hash);
 }
+
 
