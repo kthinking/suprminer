@@ -67,6 +67,7 @@ extern void tiger192sha512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad
 extern void tiger192sha512_cpu_hash_64_rtx_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target);
 extern void tiger192sha512_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash);
 extern void tiger192keccak512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash);
+extern void tiger192Luffa512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash);
 
 
 static uint32_t *d_hash[MAX_GPUS];
@@ -305,8 +306,8 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 		((uint32_t*)ptarget)[7] = 0x0ff;
 //		((uint32_t*)pdata)[1] = 0xFEDCBA98;
 //		((uint32_t*)pdata)[2] = 0x76543210;
-		((uint32_t*)pdata)[1] = 0x44444444;
-		((uint32_t*)pdata)[2] = 0x44444444;
+		((uint32_t*)pdata)[1] = 0x66666666;
+		((uint32_t*)pdata)[2] = 0x66666666;
 
 		//		94E3A654 CBD9B14B
 
@@ -698,8 +699,9 @@ extern "C" int scanhash_x16rv2(int thr_id, struct work* work, uint32_t max_nonce
 				}
 				else
 				{
-					tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
-					x11_luffa512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
+//					tiger192_cpu_hash_64(thr_id, throughput, 1, d_hash[thr_id]);
+//					x11_luffa512_cpu_hash_64_alexis(thr_id, throughput, d_hash[thr_id]); order++;
+					tiger192Luffa512_cpu_hash_64_rtx(thr_id, throughput, 1, d_hash[thr_id]); order++;
 				}
 				break;
 			case CUBEHASH:

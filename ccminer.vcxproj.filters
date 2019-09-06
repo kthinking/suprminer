@@ -1022,11 +1022,11 @@
     <CudaCompile Include="x16r\x16rv2.cu">
       <Filter>Source Files\CUDA\x16r</Filter>
     </CudaCompile>
-    <CudaCompile Include="x16rv2\cuda_tiger192.cu">
-      <Filter>Source Files\CUDA\x16rv2</Filter>
-    </CudaCompile>
     <CudaCompile Include="x16r\cuda_x16_whirlpool.cu">
       <Filter>Source Files\CUDA\x16r</Filter>
+    </CudaCompile>
+    <CudaCompile Include="x16rv2\cuda_tiger192_x16rv2.cu">
+      <Filter>Source Files\CUDA\x16rv2</Filter>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
