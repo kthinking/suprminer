@@ -1,6 +1,7 @@
 /*
  * tiger-192 djm34
- * tiger-192 merged kernels (x16Rv2) sp september 2019. tiger+luffa512, tiger+sha512 , tiger+keccak and variants
+ * tiger-192 merged kernels (x16Rv2) sp september 2019. tiger+luffa512, tiger+sha512 , 
+ * tiger+keccak and variants. Optimized the sharedmem access to reduce bank conflicts.
  */
 
 /*
@@ -1087,153 +1088,6 @@ static void qubit_rnd512_first(uint32_t *const __restrict__ statebuffer, uint32_
 }
 
 
-/*void rnd512cpu(uint32_t *statebuffer, uint32_t *statechainv)
-{
-	int i, j;
-	uint32_t t[40];
-	uint32_t chainv[8];
-	uint32_t tmp;
-
-	for (i = 0; i < 8; i++)
-	{
-		t[i] = statechainv[i];
-		for (j = 1; j < 5; j++)
-		{
-			t[i] ^= statechainv[i + 8 * j];
-		}
-	}
-
-	MULT2(t, 0);
-
-	for (j = 0; j < 5; j++)
-	{
-		for (i = 0; i < 8; i++)
-		{
-			statechainv[i + 8 * j] ^= t[i];
-		}
-	}
-
-	for (j = 0; j < 5; j++)
-	{
-		for (i = 0; i < 8; i++)
-		{
-			t[i + 8 * j] = statechainv[i + 8 * j];
-		}
-	}
-
-	for (j = 0; j < 5; j++)
-	{
-		MULT2(statechainv, j);
-	}
-
-	for (j = 0; j < 5; j++)
-	{
-		for (i = 0; i < 8; i++)
-		{
-			statechainv[8 * j + i] ^= t[8 * ((j + 1) % 5) + i];
-		}
-	}
-
-	for (j = 0; j < 5; j++)
-	{
-		for (i = 0; i < 8; i++)
-		{
-			t[i + 8 * j] = statechainv[i + 8 * j];
-		}
-	}
-
-	for (j = 0; j < 5; j++)
-	{
-		MULT2(statechainv, j);
-	}
-
-	for (j = 0; j < 5; j++)
-	{
-		for (i = 0; i < 8; i++)
-		{
-			statechainv[8 * j + i] ^= t[8 * ((j + 4) % 5) + i];
-		}
-	}
-
-	for (j = 0; j < 5; j++)
-	{
-		for (i = 0; i < 8; i++)
-		{
-			statechainv[i + 8 * j] ^= statebuffer[i];
-		}
-		MULT2(statebuffer, 0);
-	}
-
-	for (i = 0; i < 8; i++)
-	{
-		chainv[i] = statechainv[i];
-	}
-
-	for (i = 0; i < 8; i++)
-	{
-		STEP(h_CNS[(2 * i)], h_CNS[(2 * i) + 1]);
-	}
-
-	for (i = 0; i < 8; i++)
-	{
-		statechainv[i] = chainv[i];
-		chainv[i] = statechainv[i + 8];
-	}
-
-	TWEAK(chainv[4], chainv[5], chainv[6], chainv[7], 1);
-
-
-	for (i = 0; i < 8; i++)
-	{
-		STEP(h_CNS[(2 * i) + 16], h_CNS[(2 * i) + 16 + 1]);
-	}
-
-	for (i = 0; i < 8; i++)
-	{
-		statechainv[i + 8] = chainv[i];
-		chainv[i] = statechainv[i + 16];
-	}
-
-	TWEAK(chainv[4], chainv[5], chainv[6], chainv[7], 2);
-
-	for (i = 0; i < 8; i++)
-	{
-		STEP(h_CNS[(2 * i) + 32], h_CNS[(2 * i) + 32 + 1]);
-	}
-
-	for (i = 0; i < 8; i++)
-	{
-		statechainv[i + 16] = chainv[i];
-		chainv[i] = statechainv[i + 24];
-	}
-
-	TWEAK(chainv[4], chainv[5], chainv[6], chainv[7], 3);
-
-	for (i = 0; i < 8; i++)
-	{
-		STEP(h_CNS[(2 * i) + 48], h_CNS[(2 * i) + 48 + 1]);
-	}
-
-	for (i = 0; i < 8; i++)
-	{
-		statechainv[i + 24] = chainv[i];
-		chainv[i] = statechainv[i + 32];
-	}
-
-	TWEAK(chainv[4], chainv[5], chainv[6], chainv[7], 4);
-
-	for (i = 0; i < 8; i++)
-	{
-		STEP(h_CNS[(2 * i) + 64], h_CNS[(2 * i) + 64 + 1]);
-	}
-
-	for (i = 0; i < 8; i++)
-	{
-		statechainv[i + 32] = chainv[i];
-	}
-}
-*/
-
 __device__ __forceinline__
 static void rnd512_nullhash(uint32_t *const __restrict__ state){
 
@@ -1537,8 +1391,7 @@ __global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_64_rtx(int threads, 
 	}
 }
 
-
-__global__ void __launch_bounds__(384, 2) tiger192Luffa512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
+__global__ void __launch_bounds__(512, 2) tiger192Luffa512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
 {
 	__shared__ uint64_t sharedMem[1024][4];
 
@@ -1585,7 +1438,7 @@ __global__ void __launch_bounds__(384, 2) tiger192Luffa512_gpu_hash_64_rtx(int t
 		in2[7] = 0x200;
 		TIGER_ROUND_BODY_RTX(in2, buf);
 
-/*		uint64_t Hash[8];
+		/*		uint64_t Hash[8];
 		Hash[0] = buf[0];
 		Hash[1] = buf[1];
 		Hash[2] = buf[2];
@@ -1594,83 +1447,212 @@ __global__ void __launch_bounds__(384, 2) tiger192Luffa512_gpu_hash_64_rtx(int t
 		Hash[5] = 0;
 		Hash[6] = 0;
 		Hash[7] = 0;
-*/
+		*/
 		uint32_t statebuffer[8];
 
-		if (thread < threads)
-		{
-			uint32_t statechainv[40] = {
-				0x8bb0a761, 0xc2e4aa8b, 0x2d539bc9, 0x381408f8, 0x478f6633, 0x255a46ff, 0x581c37f7, 0x601c2e8e,
-				0x266c5f9d, 0xc34715d8, 0x8900670e, 0x51a540be, 0xe4ce69fb, 0x5089f4d4, 0x3cc0a506, 0x609bcb02,
-				0xa4e3cd82, 0xd24fd6ca, 0xc0f196dc, 0xcf41eafe, 0x0ff2e673, 0x303804f2, 0xa7b3cd48, 0x677addd4,
-				0x66e66a8a, 0x2303208f, 0x486dafb4, 0xc0d37dc6, 0x634d15af, 0xe5af6747, 0x10af7e38, 0xee7e6428,
-				0x01262e5d, 0xc92c2e64, 0x82fee966, 0xcea738d3, 0x867de2b0, 0xe0714818, 0xda6e831f, 0xa7062529
-			};
-			//			uint2x4* Hash = (uint2x4*)&g_hash[thread << 4];
+		uint32_t statechainv[40] = {
+			0x8bb0a761, 0xc2e4aa8b, 0x2d539bc9, 0x381408f8, 0x478f6633, 0x255a46ff, 0x581c37f7, 0x601c2e8e,
+			0x266c5f9d, 0xc34715d8, 0x8900670e, 0x51a540be, 0xe4ce69fb, 0x5089f4d4, 0x3cc0a506, 0x609bcb02,
+			0xa4e3cd82, 0xd24fd6ca, 0xc0f196dc, 0xcf41eafe, 0x0ff2e673, 0x303804f2, 0xa7b3cd48, 0x677addd4,
+			0x66e66a8a, 0x2303208f, 0x486dafb4, 0xc0d37dc6, 0x634d15af, 0xe5af6747, 0x10af7e38, 0xee7e6428,
+			0x01262e5d, 0xc92c2e64, 0x82fee966, 0xcea738d3, 0x867de2b0, 0xe0714818, 0xda6e831f, 0xa7062529
+		};
+		//			uint2x4* Hash = (uint2x4*)&g_hash[thread << 4];
 
-			uint32_t hash[16];
-			uint64_t *peker = (uint64_t *)&hash[0];
+		uint32_t hash[16];
+		uint64_t *peker = (uint64_t *)&hash[0];
 
-			peker[0] = buf[0];
-			peker[1] = buf[1];
-			peker[2] = buf[2];
-			peker[3] = 0;
-			peker[4] = 0;
-			peker[5] = 0;
-			peker[6] = 0;
-			peker[7] = 0;
+		peker[0] = buf[0];
+		peker[1] = buf[1];
+		peker[2] = buf[2];
+		peker[3] = 0;
+		peker[4] = 0;
+		peker[5] = 0;
+		peker[6] = 0;
+		peker[7] = 0;
 
 
-//			*(uint2x4*)&hash[0] = *(uint2x4*)&Hash[0];
-//			*(uint2x4*)&hash[8] = *(uint2x4*)&Hash[4];
+		//			*(uint2x4*)&hash[0] = *(uint2x4*)&Hash[0];
+		//			*(uint2x4*)&hash[8] = *(uint2x4*)&Hash[4];
 
 #pragma unroll 8
-			for (int i = 0; i < 8; i++){
-				statebuffer[i] = cuda_swab32(hash[i]);
-			}
+		for (int i = 0; i < 8; i++){
+			statebuffer[i] = cuda_swab32(hash[i]);
+		}
 
-			rnd512_first(statechainv, statebuffer);
+		rnd512_first(statechainv, statebuffer);
 
 #pragma unroll 8
-			for (int i = 0; i < 8; i++){
-				statebuffer[i] = cuda_swab32(hash[8 + i]);
-			}
+		for (int i = 0; i < 8; i++){
+			statebuffer[i] = cuda_swab32(hash[8 + i]);
+		}
 
-			rnd512(statebuffer, statechainv);
+		rnd512(statebuffer, statechainv);
 
-			statebuffer[0] = 0x80000000;
+		statebuffer[0] = 0x80000000;
 #pragma unroll 7
-			for (uint32_t i = 1; i < 8; i++)
-				statebuffer[i] = 0;
+		for (uint32_t i = 1; i < 8; i++)
+			statebuffer[i] = 0;
 
-			rnd512(statebuffer, statechainv);
+		rnd512(statebuffer, statechainv);
 
-			/*---- blank round with m=0 ----*/
-			rnd512_nullhash(statechainv);
-
-#pragma unroll 8
-			for (int i = 0; i < 8; i++)
-				hash[i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
-
-			rnd512_nullhash(statechainv);
+		/*---- blank round with m=0 ----*/
+		rnd512_nullhash(statechainv);
 
 #pragma unroll 8
-			for (int i = 0; i < 8; i++)
-				hash[8 + i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+		for (int i = 0; i < 8; i++)
+			hash[i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
 
-//			*(uint2x4*)&inout[0] = *(uint2x4*)&hash[0];
-//			*(uint2x4*)&inout[1] = *(uint2x4*)&hash[8];
-			inout[0] = peker[0];
-			inout[1] = peker[1];
-			inout[2] = peker[2];
-			inout[3] = peker[3];
-			inout[4] = peker[4];
-			inout[5] = peker[5];
-			inout[6] = peker[6];
-			inout[7] = peker[7];
+		rnd512_nullhash(statechainv);
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++)
+			hash[8 + i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+
+		//*(uint2x4*)&inout[0] = *(uint2x4*)&hash[0];
+		//*(uint2x4*)&inout[1] = *(uint2x4*)&hash[8];
+		inout[0] = peker[0];
+		inout[1] = peker[1];
+		inout[2] = peker[2];
+		inout[3] = peker[3];
+		inout[4] = peker[4];
+		inout[5] = peker[5];
+		inout[6] = peker[6];
+		inout[7] = peker[7];
+
+	}
+}
+
+__global__ void __launch_bounds__(512, 2) tiger192Luffa512_gpu_hash_64_rtx_final(int threads, uint32_t *d_hash, uint32_t* resNonce, uint64_t target)
+{
+	__shared__ uint64_t sharedMem[1024][4];
+
+	if (threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][2] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][3] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256][0] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][1] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][2] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][3] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512][0] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][1] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][2] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][3] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 768][0] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][1] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][2] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][3] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads)
+	{
+		int index = threadIdx.x & 3;
+
+		uint64_t* inout = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = inout[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY_RTX(in, buf);
+
+		in2[0] = 1;
+#pragma unroll
+		for (int i = 1; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x200;
+		TIGER_ROUND_BODY_RTX(in2, buf);
+
+		/*		uint64_t Hash[8];
+				Hash[0] = buf[0];
+				Hash[1] = buf[1];
+				Hash[2] = buf[2];
+				Hash[3] = 0;
+				Hash[4] = 0;
+				Hash[5] = 0;
+				Hash[6] = 0;
+				Hash[7] = 0;
+				*/
+		uint32_t statebuffer[8];
+
+		uint32_t statechainv[40] = {
+			0x8bb0a761, 0xc2e4aa8b, 0x2d539bc9, 0x381408f8, 0x478f6633, 0x255a46ff, 0x581c37f7, 0x601c2e8e,
+			0x266c5f9d, 0xc34715d8, 0x8900670e, 0x51a540be, 0xe4ce69fb, 0x5089f4d4, 0x3cc0a506, 0x609bcb02,
+			0xa4e3cd82, 0xd24fd6ca, 0xc0f196dc, 0xcf41eafe, 0x0ff2e673, 0x303804f2, 0xa7b3cd48, 0x677addd4,
+			0x66e66a8a, 0x2303208f, 0x486dafb4, 0xc0d37dc6, 0x634d15af, 0xe5af6747, 0x10af7e38, 0xee7e6428,
+			0x01262e5d, 0xc92c2e64, 0x82fee966, 0xcea738d3, 0x867de2b0, 0xe0714818, 0xda6e831f, 0xa7062529
+		};
+		//			uint2x4* Hash = (uint2x4*)&g_hash[thread << 4];
+
+		uint32_t hash[16];
+		uint64_t *peker = (uint64_t *)&hash[0];
+
+		peker[0] = buf[0];
+		peker[1] = buf[1];
+		peker[2] = buf[2];
+		peker[3] = 0;
+		peker[4] = 0;
+		peker[5] = 0;
+		peker[6] = 0;
+		peker[7] = 0;
+
+
+		//			*(uint2x4*)&hash[0] = *(uint2x4*)&Hash[0];
+		//			*(uint2x4*)&hash[8] = *(uint2x4*)&Hash[4];
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++){
+			statebuffer[i] = cuda_swab32(hash[i]);
+		}
+
+		rnd512_first(statechainv, statebuffer);
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++){
+			statebuffer[i] = cuda_swab32(hash[8 + i]);
+		}
+
+		rnd512(statebuffer, statechainv);
+
+		statebuffer[0] = 0x80000000;
+#pragma unroll 7
+		for (uint32_t i = 1; i < 8; i++)
+			statebuffer[i] = 0;
+
+		rnd512(statebuffer, statechainv);
+
+		/*---- blank round with m=0 ----*/
+		rnd512_nullhash(statechainv);
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++)
+			hash[i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+
+		//		rnd512_nullhash(statechainv);
+		//		#pragma unroll 8
+		//		for (int i = 0; i<8; i++)
+		//			hash[8 + i] = (statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+
+		//		Hash[0] = *(uint2x4*)&hash[0];
+		//		Hash[1] = *(uint2x4*)&hash[8];
+
+		if (devectorize(make_uint2(hash[6], hash[7])) <= target)
+		{
+			const uint32_t tmp = atomicExch(&resNonce[0], thread);
+			if (tmp != UINT32_MAX)
+				resNonce[1] = tmp;
 		}
 	}
 }
+
+
 
 __global__ void __launch_bounds__(256, 3) tiger192Keccak512_gpu_hash_64_rtx(int threads, uint32_t *d_hash)
 {
@@ -2488,6 +2470,132 @@ void tiger192sha512_gpu_hash_80_rtx(int threads, uint32_t startNonce, uint32_t *
 	}
 }
 
+__global__  __launch_bounds__(512, 2)
+void tiger192luffa512_gpu_hash_80_rtx(int threads, uint32_t startNonce, uint32_t *d_hash)
+{
+	__shared__ uint64_t sharedMem[1024][4];
+	if (threadIdx.x < 256)
+	{
+		sharedMem[threadIdx.x][0] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][1] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][2] = T1[threadIdx.x];
+		sharedMem[threadIdx.x][3] = T1[threadIdx.x];
+		sharedMem[threadIdx.x + 256][0] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][1] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][2] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 256][3] = T2[threadIdx.x];
+		sharedMem[threadIdx.x + 512][0] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][1] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][2] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 512][3] = T3[threadIdx.x];
+		sharedMem[threadIdx.x + 768][0] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][1] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][2] = T4[threadIdx.x];
+		sharedMem[threadIdx.x + 768][3] = T4[threadIdx.x];
+	}
+	__syncthreads();
+
+	int thread = (blockDim.x * blockIdx.x + threadIdx.x);
+	if (thread < threads)
+	{
+		const int index = threadIdx.x & 3;
+		uint64_t* out = (uint64_t*)&d_hash[thread << 4];
+		uint64_t buf[3], in[8], in2[8];
+
+		const uint32_t nonce = cuda_swab32(startNonce + thread);
+
+#pragma unroll
+		for (int i = 0; i < 8; i++) in[i] = c_PaddedMessage80[i];
+
+#pragma unroll
+		for (int i = 0; i < 3; i++) buf[i] = III[i];
+
+		TIGER_ROUND_BODY_RTX(in, buf);
+
+		in2[0] = c_PaddedMessage80[8];
+		in2[1] = (((uint64_t)nonce) << 32) | (c_PaddedMessage80[9] & 0xffffffff);
+		in2[2] = 1;
+#pragma unroll
+		for (int i = 3; i < 7; i++) in2[i] = 0;
+		in2[7] = 0x280;
+
+		TIGER_ROUND_BODY_RTX(in2, buf);
+
+		uint32_t statebuffer[8];
+
+		uint32_t statechainv[40] = {
+			0x8bb0a761, 0xc2e4aa8b, 0x2d539bc9, 0x381408f8, 0x478f6633, 0x255a46ff, 0x581c37f7, 0x601c2e8e,
+			0x266c5f9d, 0xc34715d8, 0x8900670e, 0x51a540be, 0xe4ce69fb, 0x5089f4d4, 0x3cc0a506, 0x609bcb02,
+			0xa4e3cd82, 0xd24fd6ca, 0xc0f196dc, 0xcf41eafe, 0x0ff2e673, 0x303804f2, 0xa7b3cd48, 0x677addd4,
+			0x66e66a8a, 0x2303208f, 0x486dafb4, 0xc0d37dc6, 0x634d15af, 0xe5af6747, 0x10af7e38, 0xee7e6428,
+			0x01262e5d, 0xc92c2e64, 0x82fee966, 0xcea738d3, 0x867de2b0, 0xe0714818, 0xda6e831f, 0xa7062529
+		};
+		//			uint2x4* Hash = (uint2x4*)&g_hash[thread << 4];
+
+		uint32_t hash[16];
+		uint64_t *peker = (uint64_t *)&hash[0];
+
+		peker[0] = buf[0];
+		peker[1] = buf[1];
+		peker[2] = buf[2];
+		peker[3] = 0;
+		peker[4] = 0;
+		peker[5] = 0;
+		peker[6] = 0;
+		peker[7] = 0;
+
+
+		//			*(uint2x4*)&hash[0] = *(uint2x4*)&Hash[0];
+		//			*(uint2x4*)&hash[8] = *(uint2x4*)&Hash[4];
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++){
+			statebuffer[i] = cuda_swab32(hash[i]);
+		}
+
+		rnd512_first(statechainv, statebuffer);
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++){
+			statebuffer[i] = cuda_swab32(hash[8 + i]);
+		}
+
+		rnd512(statebuffer, statechainv);
+
+		statebuffer[0] = 0x80000000;
+#pragma unroll 7
+		for (uint32_t i = 1; i < 8; i++)
+			statebuffer[i] = 0;
+
+		rnd512(statebuffer, statechainv);
+
+		/*---- blank round with m=0 ----*/
+		rnd512_nullhash(statechainv);
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++)
+			hash[i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+
+		rnd512_nullhash(statechainv);
+
+#pragma unroll 8
+		for (int i = 0; i < 8; i++)
+			hash[8 + i] = cuda_swab32(statechainv[i] ^ statechainv[i + 8] ^ statechainv[i + 16] ^ statechainv[i + 24] ^ statechainv[i + 32]);
+
+		//*(uint2x4*)&inout[0] = *(uint2x4*)&hash[0];
+		//*(uint2x4*)&inout[1] = *(uint2x4*)&hash[8];
+		out[0] = peker[0];
+		out[1] = peker[1];
+		out[2] = peker[2];
+		out[3] = peker[3];
+		out[4] = peker[4];
+		out[5] = peker[5];
+		out[6] = peker[6];
+		out[7] = peker[7];
+	}
+}
+
+
 __global__ void __launch_bounds__(256, 5) tiger192_gpu_hash_80_rtx(int threads, uint32_t startNonce, uint32_t *d_hash)
 {
 	__shared__ uint64_t sharedMem[1024][4];
@@ -2580,7 +2688,7 @@ __host__ void tiger192sha512_cpu_hash_64_rtx(int thr_id, int threads, int zero_p
 
 __host__ void tiger192Luffa512_cpu_hash_64_rtx(int thr_id, int threads, int zero_pad_64, uint32_t *d_hash)
 {
-	const int threadsperblock = 384;
+	const int threadsperblock = 512;
 	dim3 grid(threads / threadsperblock);
 	dim3 block(threadsperblock);
 	tiger192Luffa512_gpu_hash_64_rtx << <grid, block >> >(threads, d_hash);
@@ -2596,6 +2704,17 @@ void tiger192sha512_cpu_hash_64_rtx_final(int thr_id, uint32_t threads, uint32_t
 	dim3 block(threadsperblock);
 
 	tiger192sha512_gpu_hash_64_rtx_final << <grid, block >> > (threads, d_hash, resNonce, target);
+}
+
+__host__
+void tiger192luffa512_cpu_hash_64_rtx_final(int thr_id, uint32_t threads, uint32_t *d_hash, uint32_t *resNonce, const uint64_t target)
+{
+	const uint32_t threadsperblock = 512;
+
+	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
+	dim3 block(threadsperblock);
+
+	tiger192Luffa512_gpu_hash_64_rtx_final << <grid, block >> > (threads, d_hash, resNonce, target);
 }
 
 
@@ -2621,6 +2740,13 @@ __host__ void tiger192sha512_cpu_hash_80_rtx(int thr_id, int threads, uint32_t s
 	tiger192sha512_gpu_hash_80_rtx << <grid, block >> >(threads, startNonce, d_hash);
 }
 
+__host__ void tiger192luffa512_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash)
+{
+	const int threadsperblock = 512;
+	dim3 grid(threads / threadsperblock);
+	dim3 block(threadsperblock);
+	tiger192luffa512_gpu_hash_80_rtx << <grid, block >> >(threads, startNonce, d_hash);
+}
 
 __host__ void tiger192_cpu_hash_80_rtx(int thr_id, int threads, uint32_t startNonce, uint32_t *d_hash)
 {
