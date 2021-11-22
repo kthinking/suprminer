@@ -2,6 +2,10 @@
 
 suprminer sp-mod (september 2019) optimized x16r/x16rv2/x17 algo without any dev fee.
 
+
+This miner is not updated anymore. I did a quick test of the x17 algo on my RTX 2060 SUPER. The latest ccminer 2.3 does around 9MHASH,The popular alexis 1.0.0 fork is doing around 12 MHASH My free opensource suprminer/SPMOD-GIT is doing 19MHASH. The private miner Enemy/T-rex & co is doing around 26MHASH.
+But it all doesn't really matter because there is no profit in 26MHASH. 
+
 Most optimizations come from sp, so please support him.
 
 Overclock the core and memory for the best performance
